@@ -1,0 +1,79 @@
+// Données du catalogue et scène par défaut (sans dépendance à Three.js)
+
+// Modeleurs : comportement physique simplifié
+//  area : taille de la surface émettrice (m) → lumière diffuse + ombres douces
+//  frac : part de la lumière émise par la surface (le reste par un spot qui porte les ombres)
+//  eff  : rendement sur l'axe par rapport à un réflecteur standard
+//  angle: ouverture du faisceau (°), pen: douceur du bord, soft: flou des ombres
+export const MODS = {
+  standard:   { label: 'Réflecteur standard', angle: 55, pen: .35, eff: 1,    soft: 2 },
+  bare_small: { label: 'Tête nue',            angle: 70, pen: .25, eff: .55,  soft: 1.5 },
+  grid:       { label: 'Nid d\'abeille 20°',   angle: 22, pen: .9,  eff: 1.3,  soft: 2 },
+  snoot:      { label: 'Snoot',               angle: 10, pen: .55, eff: 1.6,  soft: 1.5 },
+  beauty:     { label: 'Beauty dish 55',      angle: 75, pen: .7,  eff: .55,  soft: 5,  area: [.55, .55], frac: .25, shape: 'round' },
+  softbox:    { label: 'Softbox 60×90',       angle: 95, pen: 1,   eff: .3,   soft: 9,  area: [.6, .9],   frac: .4 },
+  octa:       { label: 'Octabox 120',         angle: 105, pen: 1,  eff: .25,  soft: 13, area: [1.2, 1.2], frac: .4, shape: 'round' },
+  strip:      { label: 'Stripbox 30×120',     angle: 95, pen: 1,   eff: .25,  soft: 8,  area: [.3, 1.2],  frac: .4 },
+  umb_white:  { label: 'Parapluie translucide', angle: 130, pen: 1, eff: .3,  soft: 13, area: [1.05, 1.05], frac: .4, shape: 'round' },
+  umb_silver: { label: 'Parapluie argent',    angle: 100, pen: .9, eff: .5,   soft: 9,  area: [1, 1],     frac: .35,  shape: 'round' },
+  fresnel:    { label: 'Lentille de Fresnel', angle: 30, pen: .45, eff: 1.4,  soft: 2.5 },
+  panel:      { label: 'Panneau LED',         angle: 110, pen: 1,  eff: .45,  soft: 5,  area: [.3, .3],   frac: .45 },
+  tube:       { label: 'Tube LED',            angle: 160, pen: 1,  eff: .12,  soft: 6,  area: [.035, 1.2], frac: .6 },
+};
+export const FLASH_MODS = ['standard', 'grid', 'snoot', 'beauty', 'softbox', 'octa', 'strip', 'umb_white', 'umb_silver'];
+
+// Bibliothèque (menu de gauche)
+export const LIBRARY = [
+  { section: 'Lumières', items: [
+    { key: 'flash', icon: 'flash', label: 'Flash studio', sub: 'Torche · 400 Ws', make: { type: 'light', kind: 'flash', mod: 'standard', power: 400 } },
+    { key: 'speedlight', icon: 'flash', label: 'Flash cobra', sub: 'Speedlight · 60 Ws', make: { type: 'light', kind: 'flash', mod: 'bare_small', power: 60, small: true } },
+    { key: 'fresnel', icon: 'fresnel', label: 'Fresnel', sub: 'Continu · 300 W', make: { type: 'light', kind: 'cont', mod: 'fresnel', power: 300, kelvin: 3200, zoom: 30 } },
+    { key: 'panel', icon: 'panel', label: 'Panneau LED', sub: 'Continu · 100 W', make: { type: 'light', kind: 'cont', mod: 'panel', power: 100 } },
+    { key: 'tube', icon: 'tube', label: 'Tube LED', sub: 'Continu · 30 W', make: { type: 'light', kind: 'cont', mod: 'tube', power: 30 } },
+  ]},
+  { section: 'Modeleurs', note: 'Montés sur un flash studio', items: [
+    { key: 'softbox', icon: 'softbox', label: 'Softbox', sub: '60 × 90 cm', make: { type: 'light', kind: 'flash', mod: 'softbox', power: 300 } },
+    { key: 'octa', icon: 'octa', label: 'Octabox', sub: 'Ø 120 cm', make: { type: 'light', kind: 'flash', mod: 'octa', power: 400 } },
+    { key: 'strip', icon: 'strip', label: 'Stripbox', sub: '30 × 120 cm', make: { type: 'light', kind: 'flash', mod: 'strip', power: 300 } },
+    { key: 'beauty', icon: 'dish', label: 'Beauty dish', sub: 'Ø 55 cm', make: { type: 'light', kind: 'flash', mod: 'beauty', power: 200 } },
+    { key: 'umb_white', icon: 'umbrella', label: 'Parapluie', sub: 'Translucide', make: { type: 'light', kind: 'flash', mod: 'umb_white', power: 300 } },
+    { key: 'umb_silver', icon: 'umbrella', label: 'Parapluie', sub: 'Argent', make: { type: 'light', kind: 'flash', mod: 'umb_silver', power: 300 } },
+    { key: 'grid', icon: 'grid', label: 'Nid d\'abeille', sub: '20°', make: { type: 'light', kind: 'flash', mod: 'grid', power: 200 } },
+    { key: 'snoot', icon: 'snoot', label: 'Snoot', sub: 'Faisceau serré', make: { type: 'light', kind: 'flash', mod: 'snoot', power: 200 } },
+  ]},
+  { section: 'Réflecteurs & drapeaux', items: [
+    { key: 'refl_white', icon: 'reflector', label: 'Réflecteur', sub: 'Blanc · Ø 80', make: { type: 'refl', finish: 'white' } },
+    { key: 'refl_silver', icon: 'reflector', label: 'Réflecteur', sub: 'Argent · Ø 80', make: { type: 'refl', finish: 'silver' } },
+    { key: 'refl_gold', icon: 'reflector', label: 'Réflecteur', sub: 'Doré · Ø 80', make: { type: 'refl', finish: 'gold' } },
+    { key: 'vflat_white', icon: 'vflat', label: 'V-flat', sub: 'Blanc · 1 × 2 m', make: { type: 'refl', finish: 'vwhite' } },
+    { key: 'vflat_black', icon: 'vflat', label: 'V-flat', sub: 'Noir · 1 × 2 m', make: { type: 'refl', finish: 'vblack' } },
+    { key: 'flag', icon: 'flag', label: 'Drapeau', sub: 'Noir · 60 × 90', make: { type: 'refl', finish: 'flag' } },
+  ]},
+];
+
+export const BACKGROUNDS = [
+  { c: '#f4f4f2', n: 'Blanc' }, { c: '#cfcfcc', n: 'Gris clair' }, { c: '#8d8d8a', n: 'Gris moyen' },
+  { c: '#3c3c3b', n: 'Anthracite' }, { c: '#111111', n: 'Noir' }, { c: '#d9c7b0', n: 'Sable' },
+  { c: '#9fb3c8', n: 'Bleu ciel' }, { c: '#b84a3a', n: 'Rouge brique' },
+];
+export const SKINS = { light: { label: 'Caucasienne', c: '#e7c4ab' }, medium: { label: 'Asiatique', c: '#d6ab88' }, dark: { label: 'Foncée', c: '#5e3c2b' } };
+export const FOCALS = [14, 24, 28, 35, 50, 85, 105, 135, 200];
+export const FORMATS = { '2:3': [24, 36], '4:5': [24, 30], '1:1': [24, 24], '3:2': [36, 24], '16:9': [36, 20.25] };
+export const APERTURES = [1.4, 2, 2.8, 4, 5.6, 8, 11, 16, 22];
+export const ISOS = [100, 200, 400, 800, 1600];
+export const SHUTTERS = [['1/30', 1 / 30], ['1/60', 1 / 60], ['1/125', 1 / 125], ['1/200', 1 / 200], ['1/250', 1 / 250], ['1/500', 1 / 500]];
+export const WBS = [3200, 4300, 5600, 6500];
+
+export function defaultScene() {
+  return {
+    v: 1,
+    background: { color: '#f4f4f2' },
+    studio: { walls: 'dark' },
+    model: { gender: 'f', skin: 'light', distance: 1.8, rot: 0 },
+    camera: { x: 0, y: 1.5, z: 3.4, tx: 0, ty: 1.42, tz: 0, focal: 85, format: '4:5', iso: 100, f: 11, shutter: 1 / 125, wb: 5600 },
+    items: [
+      { id: 'key', type: 'light', kind: 'flash', mod: 'octa', power: 200, kelvin: 5600, x: -1.35, y: 2.3, z: 0.95, aim: 'face' },
+      { id: 'refl', type: 'refl', finish: 'white', x: 0.9, y: 1.0, z: 0.75, aim: 'face' },
+    ],
+  };
+}

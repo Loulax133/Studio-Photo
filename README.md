@@ -1,0 +1,28 @@
+# Light Studio
+
+Simulateur de lumière studio : dossiers → sets → scène 3D avec mannequin, lumières, modeleurs, réflecteurs, appareil photo et rendu en direct.
+
+## Mettre en ligne (GitHub Pages)
+1. Crée un dépôt GitHub `light-studio` et envoie-y **tout le contenu de ce dossier** (index.html à la racine).
+2. Dépôt → Settings → Pages → Source : `Deploy from a branch`, branche `main`, dossier `/ (root)`.
+3. L'app sera sur `https://<ton-pseudo>.github.io/light-studio/`.
+
+## Brancher Firebase (connexion + synchro ordi/téléphone)
+1. Console Firebase → **Ajouter un projet** → `light-studio` (Analytics inutile).
+2. ⚙️ Paramètres du projet → **Vos applications** → icône Web `</>` → nom `Light Studio` (pas besoin de Firebase Hosting). Copie le bloc `firebaseConfig`.
+3. Colle-le dans `js/firebase-config.js` à la place de `null`.
+4. **Authentication** → Commencer → Méthodes de connexion : active **Google** et **Adresse e-mail/Mot de passe**.
+5. Authentication → Paramètres → **Domaines autorisés** → ajoute `<ton-pseudo>.github.io`.
+6. **Firestore Database** → Créer une base → mode production → région `europe-west9 (Paris)`.
+7. Firestore → onglet **Règles** → colle le contenu de `firestore.rules` → Publier.
+
+La connexion est mémorisée (persistance locale Firebase) : tu restes connecté jusqu'à ce que tu te déconnectes.
+
+## Sur iPhone
+Ouvre l'URL dans Safari → Partager → **Sur l'écran d'accueil**. Si la connexion Google bloque dans l'app installée, utilise la connexion email/mot de passe (même compte, mêmes sets).
+
+## Structure
+- `js/store.js` — connexion + sauvegarde (Firebase, ou local si pas configuré)
+- `js/home.js` — accueil dossiers / sets
+- `js/editor/` — éditeur 3D : `studio.js` (scène, photométrie), `mannequin.js`, `defaults.js` (catalogue), `editor.js` (interface)
+- `vendor/three/` — Three.js r187 embarqué (aucune dépendance externe à part les polices et Firebase)
