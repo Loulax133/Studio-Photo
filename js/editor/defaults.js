@@ -18,6 +18,7 @@ export const MODS = {
   umb_silver: { label: 'Parapluie argent',    angle: 100, pen: .9, eff: .5,   soft: 9,  area: [1, 1],     frac: .35,  shape: 'round' },
   fresnel:    { label: 'Lentille de Fresnel', angle: 30, pen: .45, eff: 1.4,  soft: 2.5 },
   panel:      { label: 'Panneau LED',         angle: 110, pen: 1,  eff: .45,  soft: 5,  area: [.3, .3],   frac: .45 },
+  window:     { label: 'Fenêtre',             angle: 150, pen: 1,  eff: .5,   soft: 12, area: [1.2, 1.6], frac: .55 },
   tube:       { label: 'Tube LED',            angle: 160, pen: 1,  eff: .12,  soft: 6,  area: [.035, 1.2], frac: .6 },
 };
 export const FLASH_MODS = ['standard', 'grid', 'snoot', 'beauty', 'softbox', 'octa', 'strip', 'umb_white', 'umb_silver'];
@@ -30,6 +31,7 @@ export const LIBRARY = [
     { key: 'fresnel', icon: 'fresnel', label: 'Fresnel', sub: 'Continu · 300 W', make: { type: 'light', kind: 'cont', mod: 'fresnel', power: 300, kelvin: 3200, zoom: 30 } },
     { key: 'panel', icon: 'panel', label: 'Panneau LED', sub: 'Continu · 100 W', make: { type: 'light', kind: 'cont', mod: 'panel', power: 100 } },
     { key: 'tube', icon: 'tube', label: 'Tube LED', sub: 'Continu · 30 W', make: { type: 'light', kind: 'cont', mod: 'tube', power: 30 } },
+    { key: 'window', icon: 'window', label: 'Fenêtre', sub: 'Lumière du jour', make: { type: 'light', kind: 'cont', mod: 'window', power: 500, kelvin: 5600 } },
   ]},
   { section: 'Modeleurs', note: 'Montés sur un flash studio', items: [
     { key: 'softbox', icon: 'softbox', label: 'Softbox', sub: '60 × 90 cm', make: { type: 'light', kind: 'flash', mod: 'softbox', power: 300 } },
@@ -86,8 +88,45 @@ export function itemName(it) {
   return 'Flash studio';
 }
 export function itemModifier(it) {
-  if (it.type !== 'light') return '—';
-  if (it.small) return 'Tête nue';
-  if (it.kind === 'cont') return it.mod === 'fresnel' ? `Faisceau ${it.zoom || 30}°` : '—';
-  return MODS[it.mod].label;
+  if (it.type !== 'light') return (it.yaw || it.pitch) ? `Tourné ${it.yaw || 0}° / ${it.pitch || 0}°` : '—';
+  let s = it.small ? 'Tête nue' : it.kind === 'cont' ? (it.mod === 'fresnel' ? `Faisceau ${it.zoom || 30}°` : '') : MODS[it.mod].label;
+  const extra = [];
+  if (it.gel && GELS[it.gel]) extra.push(GELS[it.gel].label.replace(/ \(.*\)/, ''));
+  if (it.gobo && GOBOS[it.gobo]) extra.push('gobo ' + GOBOS[it.gobo].toLowerCase());
+  if (extra.length) s = (s ? s + ' + ' : '') + extra.join(' + ');
+  return s || '—';
 }
+
+// Gélatines : k = [température visée, température d'origine] (correction), rgb = couleur créative (sRGB)
+export const GELS = {
+  none: { label: 'Aucune' },
+  cto_half: { label: 'CTO ½ (orange)', k: [4300, 5600], t: .95 },
+  cto: { label: 'CTO (orange)', k: [3200, 5600], t: .95 },
+  ctb_half: { label: 'CTB ½ (bleu)', k: [4300, 3200], t: .95 },
+  ctb: { label: 'CTB (bleu)', k: [5600, 3200], t: .95 },
+  red: { label: 'Rouge', rgb: [1, .12, .1] },
+  amber: { label: 'Ambre', rgb: [1, .62, .2] },
+  yellow: { label: 'Jaune', rgb: [1, .9, .25] },
+  green: { label: 'Vert', rgb: [.25, 1, .3] },
+  cyan: { label: 'Cyan', rgb: [.2, .85, 1] },
+  blue: { label: 'Bleu', rgb: [.15, .3, 1] },
+  violet: { label: 'Violet', rgb: [.55, .25, 1] },
+  magenta: { label: 'Magenta', rgb: [1, .2, .75] },
+  pink: { label: 'Rose', rgb: [1, .55, .7] },
+};
+export const GOBOS = { '': 'Aucun', window: 'Fenêtre', blinds: 'Stores', leaves: 'Feuillage', dots: 'Points' };
+export const GOBO_MODS = ['standard', 'grid', 'snoot', 'fresnel', 'bare_small'];
+
+// Schémas classiques. p = puissance relative (l'exposition est équilibrée automatiquement à l'application)
+const L = (id, mod, p, x, y, z, extra = {}) => ({ id, type: 'light', kind: 'flash', mod, power: p, kelvin: 5600, x, y, z, aim: 'face', ...extra });
+const R = (id, finish, x, y, z, extra = {}) => ({ id, type: 'refl', finish, x, y, z, aim: 'face', ...extra });
+export const PRESETS = [
+  { key: 'rembrandt', label: 'Rembrandt', desc: 'Triangle de lumière sous l\'œil', build: () => ({ items: [L('k', 'softbox', 100, -1.15, 2.3, .7), R('f', 'white', 1, 1, .7)] }) },
+  { key: 'loop', label: 'Loop', desc: 'Petite ombre du nez en boucle', build: () => ({ items: [L('k', 'softbox', 100, -.85, 2.2, 1.25), R('f', 'white', .9, 1, .8)] }) },
+  { key: 'butterfly', label: 'Papillon', desc: 'Ombre sous le nez, lumière face haute', build: () => ({ items: [L('k', 'beauty', 100, 0, 2.3, 1.15), R('f', 'white', 0, .75, .75, { aim: 'face' })] }) },
+  { key: 'clamshell', label: 'Clamshell', desc: 'Beauté : dessus + dessous', build: () => ({ items: [L('k', 'octa', 100, 0, 2.25, 1.05), L('b', 'strip', 30, 0, .75, .95, { aim: 'face' })] }) },
+  { key: 'split', label: 'Split', desc: 'Moitié du visage dans l\'ombre', build: () => ({ items: [L('k', 'strip', 100, -1.5, 1.7, .05), R('n', 'vblack', 1.1, 1, .2)] }) },
+  { key: 'rim', label: 'Contre-jour', desc: 'Deux strips de découpe + face', build: () => ({ walls: 'dark', bg: '#3c3c3b', items: [L('k', 'octa', 100, -.7, 2.2, 1.45), L('r1', 'strip', 140, -1.2, 1.9, -.65), L('r2', 'strip', 140, 1.2, 1.9, -.65)] }) },
+  { key: 'highkey', label: 'High key', desc: 'Fond blanc éclatant', build: d => ({ bg: '#f4f4f2', walls: 'light', items: [L('k', 'octa', 100, 0, 2.35, 1.25), L('b1', 'softbox', 320, -1.15, 1.6, -d + .9, { aim: 'bg' }), L('b2', 'softbox', 320, 1.15, 1.6, -d + .9, { aim: 'bg' }), R('f', 'white', 0, .8, .8)] }) },
+  { key: 'lowkey', label: 'Low key', desc: 'Fond noir, lumière sculptée', build: () => ({ bg: '#111111', walls: 'dark', items: [L('k', 'grid', 100, -1.3, 2.05, .55), R('n', 'vblack', 1.1, 1, .3)] }) },
+];

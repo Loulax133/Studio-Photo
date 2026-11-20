@@ -33,6 +33,10 @@ class LocalBackend {
   async createSet(folderId, name, scene) { const db = this._db(); const s = { id: uid(), folderId, name, scene, thumb: '', createdAt: Date.now(), updatedAt: Date.now() }; db.sets[s.id] = s; if (db.folders[folderId]) db.folders[folderId].updatedAt = Date.now(); this._save(db); return s; }
   async updateSet(id, patch) { const db = this._db(); if (!db.sets[id]) return; Object.assign(db.sets[id], patch, { updatedAt: Date.now() }); this._save(db); }
   async deleteSet(id) { const db = this._db(); delete db.sets[id]; this._save(db); }
+  async listPresets() { return Object.values(this._db().presets || {}).sort((a, b) => a.createdAt - b.createdAt); }
+  async createPreset(p) { const db = this._db(); db.presets ||= {}; const r = { id: uid(), ...p, createdAt: Date.now() }; db.presets[r.id] = r; this._save(db); return r; }
+  async deletePreset(id) { const db = this._db(); delete db.presets?.[id]; this._save(db); }
+  get canShare() { return false; }
 }
 
 /* ------------------------------------------------------------------ */
@@ -103,6 +107,20 @@ class FirebaseBackend {
     await this.F.updateDoc(this._doc('sets', id), p);
   }
   async deleteSet(id) { await this.F.deleteDoc(this._doc('sets', id)); }
+  async listPresets() { return (await this._list('presets')).map(p => ({ ...p, items: typeof p.items === 'string' ? JSON.parse(p.items) : p.items })).sort((a, b) => a.createdAt - b.createdAt); }
+  async createPreset(p) { const id = uid(); const r = { ...p, items: JSON.stringify(p.items), createdAt: Date.now(), updatedAt: Date.now() }; await this.F.setDoc(this._doc('presets', id), r); return { id, ...p }; }
+  async deletePreset(id) { await this.F.deleteDoc(this._doc('presets', id)); }
+  // partage en lecture seule : copie publique du set dans /shared/{id}
+  get canShare() { return true; }
+  async publishShare(shareId, set, scene, thumb) {
+    const id = shareId || uid() + uid();
+    await this.F.setDoc(this.F.doc(this.db, 'shared', id), {
+      owner: this.user.uid, ownerName: this.user.name || '', name: set.name, scene: JSON.stringify(scene), thumb: thumb || '', updatedAt: Date.now(),
+    });
+    return id;
+  }
+  async unshare(shareId) { await this.F.deleteDoc(this.F.doc(this.db, 'shared', shareId)); }
+  async getShared(id) { const d = await this.F.getDoc(this.F.doc(this.db, 'shared', id)); return d.exists() ? { id: d.id, ...d.data() } : null; }
 }
 
 // Firestore stocke la scène en texte : on la relit en objet

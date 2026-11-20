@@ -9,8 +9,15 @@ let store, current = null; // vue active (pour la nettoyer)
 function route() {
   current?.destroy?.(); current = null;
   app.innerHTML = '';
-  if (!store.user) { current = renderAuth(app, store); return; }
   const h = location.hash.slice(1);
+  // lien de partage : visible sans compte
+  if (h.startsWith('share-')) {
+    if (store.mode !== 'firebase') { app.innerHTML = '<div class="auth"><p class="sub">Ce lien de partage nécessite la version en ligne de Light Studio.</p></div>'; return; }
+    import('./editor/editor.js').then(m => { current = m.openEditor(app, store, null, { shareId: h.slice(6) }); })
+      .catch(e => { console.error(e); toast("Impossible d'ouvrir le set partagé"); });
+    return;
+  }
+  if (!store.user) { current = renderAuth(app, store); return; }
   if (h.startsWith('set-')) {
     import('./editor/editor.js').then(m => { current = m.openEditor(app, store, h.slice(4)); })
       .catch(e => { console.error(e); toast("Impossible d'ouvrir l'éditeur"); });

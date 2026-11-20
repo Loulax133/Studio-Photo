@@ -14,7 +14,7 @@ Simulateur de lumière studio : dossiers → sets → scène 3D avec mannequin, 
 4. **Authentication** → Commencer → Méthodes de connexion : active **Google** et **Adresse e-mail/Mot de passe**.
 5. Authentication → Paramètres → **Domaines autorisés** → ajoute `<ton-pseudo>.github.io`.
 6. **Firestore Database** → Créer une base → mode production → région `europe-west9 (Paris)`.
-7. Firestore → onglet **Règles** → colle le contenu de `firestore.rules` → Publier.
+7. Firestore → onglet **Règles** → colle le contenu de `firestore.rules` → Publier. (À refaire à chaque fois que ce fichier change : la V1.4 ajoute les règles du partage.)
 
 La connexion est mémorisée (persistance locale Firebase) : tu restes connecté jusqu'à ce que tu te déconnectes.
 
@@ -26,3 +26,12 @@ Ouvre l'URL dans Safari → Partager → **Sur l'écran d'accueil**. Si la conne
 - `js/home.js` — accueil dossiers / sets
 - `js/editor/` — éditeur 3D : `studio.js` (scène, photométrie), `mannequin.js`, `defaults.js` (catalogue), `editor.js` (interface)
 - `vendor/three/` — Three.js r187 embarqué (aucune dépendance externe à part les polices et Firebase)
+
+## Nouveautés V1.4
+- Rendu « boîtier » : courbe calée sur un appareil (blanc pur ≈ +2,8 IL au-dessus du gris moyen) → cellule, image et histogramme cohérents.
+- Ombres douces calculées en plusieurs points de la source (qualité « précise » sur ordinateur, « rapide » sur téléphone) + rebond du papier sur le sujet.
+- Rotation / inclinaison libres des lumières (feathering). Perche automatique pour les lumières placées devant le sujet.
+- Schémas en un clic (Rembrandt, loop, papillon, clamshell, split, contre-jour, high key, low key) avec exposition équilibrée, + schémas perso.
+- Gélatines (CTO, CTB, couleurs), gobos (fenêtre, stores, feuillage, points), lumière de fenêtre, fumée/brume avec faisceaux.
+- Profondeur de champ simulée (mise au point sur le point bleu), grille des tiers, comparaison avant / après.
+- Lien de partage en lecture seule (nécessite les nouvelles règles Firestore).
