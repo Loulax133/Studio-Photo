@@ -57,7 +57,7 @@ export const BACKGROUNDS = [
   { c: '#9fb3c8', n: 'Bleu ciel' }, { c: '#b84a3a', n: 'Rouge brique' },
 ];
 export const SKINS = { light: { label: 'Caucasienne', c: '#e7c4ab' }, medium: { label: 'Asiatique', c: '#d6ab88' }, dark: { label: 'Foncée', c: '#5e3c2b' } };
-export const FOCALS = [14, 24, 28, 35, 50, 85, 105, 135, 200];
+export const FOCALS = [14, 20, 24, 28, 35, 40, 50, 70, 85, 90, 100, 105, 135, 200];
 export const FORMATS = { '2:3': [24, 36], '4:5': [24, 30], '1:1': [24, 24], '3:2': [36, 24], '16:9': [36, 20.25] };
 export const APERTURES = [1.4, 2, 2.8, 4, 5.6, 8, 11, 16, 22];
 export const ISOS = [100, 200, 400, 800, 1600];
@@ -76,4 +76,18 @@ export function defaultScene() {
       { id: 'refl', type: 'refl', finish: 'white', x: 0.9, y: 1.0, z: 0.75, aim: 'face' },
     ],
   };
+}
+
+export const FINISHES = { white: 'Réflecteur blanc', silver: 'Réflecteur argent', gold: 'Réflecteur doré', vwhite: 'V-flat blanc', vblack: 'V-flat noir', flag: 'Drapeau noir' };
+export function itemName(it) {
+  if (it.type !== 'light') return FINISHES[it.finish] || 'Réflecteur';
+  if (it.small) return 'Flash cobra';
+  if (it.kind === 'cont') return MODS[it.mod].label;
+  return 'Flash studio';
+}
+export function itemModifier(it) {
+  if (it.type !== 'light') return '—';
+  if (it.small) return 'Tête nue';
+  if (it.kind === 'cont') return it.mod === 'fresnel' ? `Faisceau ${it.zoom || 30}°` : '—';
+  return MODS[it.mod].label;
 }

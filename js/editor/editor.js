@@ -2,9 +2,10 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/OrbitControls.js';
 import { TransformControls } from 'three/addons/TransformControls.js';
 import { Studio } from './studio.js';
-import { LIBRARY, MODS, FLASH_MODS, BACKGROUNDS, SKINS, FOCALS, FORMATS, APERTURES, ISOS, SHUTTERS, WBS, defaultScene } from './defaults.js';
+import { LIBRARY, MODS, FLASH_MODS, BACKGROUNDS, SKINS, FOCALS, FORMATS, APERTURES, ISOS, SHUTTERS, WBS, defaultScene, itemName } from './defaults.js';
+import { buildSheet } from './sheet.js';
 import { parseScene } from '../store.js';
-import { icon, esc, toast, modal } from '../ui.js';
+import { icon, esc, toast, modal, popMenu } from '../ui.js';
 
 const clone = o => JSON.parse(JSON.stringify(o));
 const fmtF = n => 'f/' + (n >= 10 ? Math.round(n) : (Math.round(n * 10) / 10)).toString().replace('.', ',');
@@ -30,7 +31,7 @@ export function openEditor(root, store, setId) {
       </div>
       <div class="grow"></div>
       <div class="pill"><div class="seg" id="viewseg"><button data-v="3d" class="on">3D</button><button data-v="top">Schéma</button></div></div>
-      <div class="pill hide-m"><button class="btn ghost sm" id="export">${icon('download')}Exporter</button></div>
+      <div class="pill"><button class="btn ghost sm" id="export" title="Exporter">${icon('download')}<span class="hide-m">Exporter</span></button></div>
     </div>
     <aside class="float lib" id="lib">
       <button class="btn ghost lib-toggle" id="libtog" style="width:100%;justify-content:space-between">Bibliothèque ${icon('chev')}</button>
@@ -62,17 +63,20 @@ export function openEditor(root, store, setId) {
   function init() {
     studio = new Studio(canvas);
     studio.load(data);
-    window.__ls = { studio, get data() { return data; } }; // aide au débogage
+    window.__ls = { studio, get data() { return data; }, select: s => select(s) }; // aide au débogage
+    // ordre important : gizmo et glisser-déposer avant l'orbite, pour qu'ils puissent la bloquer
+    gizmo = new TransformControls(studio.view, canvas);
+    gizmo.setSize(isMobile ? 1.1 : .8);
+    const helper = gizmo.getHelper(); helper.traverse(o => o.layers.set(1)); studio.scene.add(helper);
+    gizmo.getRaycaster().layers.enableAll(); // les poignées sont sur le calque des aides : il faut que le gizmo puisse les toucher
+    gizmo.addEventListener('dragging-changed', e => { orbit.enabled = !e.value; if (!e.value) commit(); });
+    gizmo.addEventListener('objectChange', onGizmo);
+    bindPicking();
     orbit = new OrbitControls(studio.view, canvas);
     orbit.enableDamping = true; orbit.dampingFactor = .12;
     orbit.target.set(0, 1, -0.3); orbit.maxPolarAngle = Math.PI * 0.495; orbit.minDistance = 1.2; orbit.maxDistance = 18;
     studio.view.position.set(isMobile ? 7.5 : 5.2, isMobile ? 5 : 3.6, isMobile ? 8.5 : 5.8);
-    gizmo = new TransformControls(studio.view, canvas);
-    gizmo.setSize(isMobile ? 1.1 : .8);
-    const helper = gizmo.getHelper(); helper.traverse(o => o.layers.set(1)); studio.scene.add(helper);
-    gizmo.addEventListener('dragging-changed', e => { orbit.enabled = !e.value; if (!e.value) commit(); });
-    gizmo.addEventListener('objectChange', onGizmo);
-    buildLibrary(); bindTop(); bindRender(); bindPicking();
+    buildLibrary(); bindTop(); bindRender();
     addEventListener('resize', onResize); onResize();
     addEventListener('keydown', onKey);
     snapshot();
@@ -146,13 +150,20 @@ export function openEditor(root, store, setId) {
     $('#name').onchange = () => scheduleSave();
     $('#undo').onclick = undo; $('#redo').onclick = redo;
     $('#viewseg').onclick = e => { const b = e.target.closest('button'); if (!b) return; setView(b.dataset.v); };
-    $('#export').onclick = () => {
-      const url = studio.capture(2400, 'image/jpeg', .93);
-      const a = document.createElement('a'); a.href = url; a.download = ($('#name').value || 'rendu') + '.jpg'; a.click();
-      toast('Rendu exporté (2400 px)');
-    };
+    $('#export').onclick = e => popMenu(e.currentTarget, [
+      { icon: 'layers', label: 'Fiche du set (schéma + réglages + rendu)', run: exportSheet },
+      { icon: 'frame', label: 'Rendu seul (JPG 2400 px)', run: () => { download(studio.capture(2400, 'image/jpeg', .93), ($('#name').value || 'rendu') + '.jpg'); toast('Rendu exporté'); } }]);
     $('#libtog').onclick = () => $('#lib').classList.toggle('collapsed');
     if (isMobile) $('#lib').classList.add('collapsed');
+  }
+  function download(url, name) { const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
+  async function exportSheet() {
+    toast('Préparation de la fiche…');
+    try {
+      const url = await buildSheet({ studio, data, name: $('#name').value || set.name });
+      download(url, ($('#name').value || 'set') + ' - fiche.png');
+      toast('Fiche exportée');
+    } catch (e) { console.error(e); toast("Impossible de générer la fiche"); }
   }
   let viewMode = '3d', saved3d = null;
   function setView(v) {
@@ -223,7 +234,8 @@ export function openEditor(root, store, setId) {
       h += sec(g.section, g.section === 'Lumières' ? 'bulb' : g.section === 'Modeleurs' ? 'softbox' : 'reflector',
         `${g.note ? `<div class="s" style="font-size:11.5px;color:var(--ink3);margin:-2px 0 8px">${g.note}</div>` : ''}<div class="items">${g.items.map(it => `<button class="item" data-add="${it.key}"><span class="ico">${icon(it.icon)}</span><span class="n">${esc(it.label)}</span><span class="s">${esc(it.sub)}</span></button>`).join('')}</div>`);
     }
-    h += sec('Appareil photo', 'camera', `<div class="ctl" style="margin-top:0"><label>Focale</label>${chips('focal', FOCALS, c.focal, v => v + ' mm')}</div>
+    h += sec('Appareil photo', 'camera', `<div class="ctl" style="margin-top:0"><label>Focale <b id="vfoc">${c.focal} mm</b></label>${chips('focal', FOCALS, c.focal, v => v + ' mm')}
+        <input type="range" min="10" max="300" step="1" value="${c.focal}" data-range="focal" aria-label="Focale libre" style="margin-top:8px"></div>
       <div class="ctl"><label>Format</label>${chips('format', Object.keys(FORMATS), c.format)}</div>
       <div class="ctl"><label>Ouverture</label>${chips('f', APERTURES, c.f, v => fmtF(v))}</div>
       <div class="ctl"><label>Vitesse</label>${chips('shutter', SHUTTERS.map(s => s[1]), c.shutter, v => fmtSh(+v))}</div>
@@ -255,9 +267,10 @@ export function openEditor(root, store, setId) {
         if (k === 'distance') { m.distance = v; studio.applyModel(); $('#vdist').textContent = v.toFixed(1).replace('.', ',') + ' m'; }
         if (k === 'rot') { m.rot = v; studio.applyModel(); $('#vrot').textContent = v + '°'; }
         if (k === 'camy') { c.y = v; studio.applyCamera(); $('#vch').textContent = v.toFixed(2).replace('.', ',') + ' m'; }
+        if (k === 'focal') { c.focal = v; studio.applyCamera(); $('#vfoc').textContent = v + ' mm'; root.querySelectorAll('[data-chips=focal] .chip').forEach(ch => ch.classList.toggle('on', +ch.dataset.v === v)); }
         renderFoot();
       };
-      r.onchange = () => commit({ keepInspector: true });
+      r.onchange = () => { commit({ keepInspector: true }); if (r.dataset.range === 'focal') buildLibrary(); };
     });
     el.querySelectorAll('[data-frame]').forEach(b => b.onclick = () => quickFrame(b.dataset.frame));
     el.querySelectorAll('[data-add]').forEach(b => b.onclick = () => addItem(b.dataset.add));
@@ -282,7 +295,7 @@ export function openEditor(root, store, setId) {
     const it = { id: Math.random().toString(36).slice(2, 9), ...clone(def.make) };
     // placement : prochain angle libre autour du sujet
     const used = data.items.map(i => Math.atan2(i.x, i.z));
-    const cands = it.type === 'refl' ? [50, -50, 20, -20, 90, -90] : [-45, 45, -120, 120, -90, 90, 20, -20];
+    const cands = it.type === 'refl' ? [50, -50, 75, -75, 100, -100] : [-45, 45, -120, 120, -90, 90, 20, -20];
     let best = cands[0], bestScore = -1;
     for (const a of cands) { const r = a * Math.PI / 180; const sc = Math.min(9, ...used.map(u => Math.abs(Math.atan2(Math.sin(u - r), Math.cos(u - r))))); if (sc > bestScore + .3) { best = a; bestScore = sc; } }
     const ang = best * Math.PI / 180, dist = it.type === 'refl' ? 1.1 : Math.abs(best) > 100 ? 1.3 : (it.mod === 'octa' || it.mod?.startsWith('umb') ? 1.8 : 1.6);
@@ -331,18 +344,47 @@ export function openEditor(root, store, setId) {
   }
   function bindPicking() {
     const ray = new THREE.Raycaster(); ray.layers.enableAll();
-    let down = null;
-    canvas.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY }; });
-    canvas.addEventListener('pointerup', e => {
-      if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6 || gizmo.dragging) { down = null; return; }
-      down = null;
-      if (gizmo.axis) return; // clic sur la poignée
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hitP = new THREE.Vector3(), off = new THREE.Vector3();
+    let down = null, drag = null;
+    const pick = e => {
       const ndc = new THREE.Vector2(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
       ray.setFromCamera(ndc, studio.view);
       const hit = ray.intersectObjects(studio.pickables(), true).find(h => h.object.userData.pick && h.object.visible);
-      const pk = hit?.object.userData.pick;
+      return hit?.object.userData.pick || null;
+    };
+    const toSel = pk => pk.kind === 'item' ? { kind: 'item', id: pk.id } : { kind: pk.kind };
+    canvas.addEventListener('pointerdown', e => {
+      down = { x: e.clientX, y: e.clientY }; drag = null;
+      if (gizmo.axis || !studio) return; // poignée du gizmo
+      const pk = pick(e);
+      // glisser directement un élément (lumière, réflecteur, appareil, point visé) sur le sol
+      if (pk && pk.kind !== 'model') {
+        const s = toSel(pk);
+        if (!sel || sel.kind !== s.kind || sel.id !== s.id) select(s);
+        plane.constant = -proxy.position.y;
+        if (ray.ray.intersectPlane(plane, hitP)) {
+          off.copy(proxy.position).sub(hitP);
+          drag = { moved: false }; orbit.enabled = false;
+          canvas.setPointerCapture(e.pointerId);
+        }
+      }
+    });
+    canvas.addEventListener('pointermove', e => {
+      if (!drag) return;
+      if (!drag.moved && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 4) return;
+      drag.moved = true;
+      const ndc = new THREE.Vector2(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+      ray.setFromCamera(ndc, studio.view);
+      if (ray.ray.intersectPlane(plane, hitP)) { proxy.position.x = hitP.x + off.x; proxy.position.z = hitP.z + off.z; onGizmo(); }
+    });
+    canvas.addEventListener('pointerup', e => {
+      if (drag) { orbit.enabled = true; if (drag.moved) commit(); drag = null; down = null; return; }
+      if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6 || gizmo.dragging) { down = null; return; }
+      down = null;
+      if (gizmo.axis) return;
+      const pk = pick(e);
       if (!pk) return select(null);
-      select(pk.kind === 'item' ? { kind: 'item', id: pk.id } : { kind: pk.kind });
+      select(toSel(pk));
     });
   }
 
@@ -376,7 +418,7 @@ export function openEditor(root, store, setId) {
     } else {
       body = `${heightCtl}${aimChips}`;
     }
-    const name = it.type === 'light' ? (it.small ? 'Flash cobra' : it.kind === 'cont' ? MODS[it.mod].label : MODS[it.mod].label) : { white: 'Réflecteur blanc', silver: 'Réflecteur argent', gold: 'Réflecteur doré', vwhite: 'V-flat blanc', vblack: 'V-flat noir', flag: 'Drapeau noir' }[it.finish];
+    const name = it.type === 'light' && !it.small && it.kind === 'flash' ? MODS[it.mod].label : itemName(it);
     el.innerHTML = `<h4>${icon(it.type === 'light' ? (it.kind === 'flash' ? 'flash' : 'bulb') : 'reflector')}${esc(name)}<span class="k">${it.type === 'light' ? (it.kind === 'flash' ? 'Flash' : 'Continu') : ''}</span></h4>
       ${body}
       <div class="row"><button class="btn sm" id="dup">${icon('dup')}Dupliquer</button><button class="btn sm" id="del" style="color:#c62828">${icon('trash')}Supprimer</button></div>`;

@@ -166,3 +166,13 @@ select.field{height:36px;font-size:13px}
 }
 .lib-toggle{display:none;height:48px;flex:none;font-weight:600}
 @media (max-width:760px){.lib-toggle{display:flex}}
+
+/* squelettes de chargement */
+.card.sk .frame{background:linear-gradient(90deg,#f3f3f2 0%,#fafaf9 50%,#f3f3f2 100%);background-size:200% 100%;animation:sk 1.2s linear infinite;border-color:transparent}
+.sk-line{height:12px;width:60%;border-radius:6px;background:#f0f0ef;margin-top:4px}
+.sk-title{height:34px;width:180px;border-radius:8px;background:#f3f3f2}
+@keyframes sk{from{background-position:200% 0}to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.card.sk .frame{animation:none}}
+button.brand{font:inherit;font-weight:600;font-size:16px}
+.lbl{display:block;font-size:12px;color:var(--ink2);margin:12px 0 6px}
+.modal .lbl:first-of-type{margin-top:0}
