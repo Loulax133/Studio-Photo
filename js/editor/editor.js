@@ -17,6 +17,7 @@ const maxPower = it => it.kind === 'flash' ? (it.small ? 120 : 1200) : (it.mod =
 export function openEditor(root, store, setId, opts = {}) {
   const readOnly = !!opts.shareId;
   let alive = true, set = null, data = null, studio, orbit, gizmo, raf = 0, shared = null, myPresets = [];
+  let pendingFrame = null;
   let sel = null; // { kind: 'item'|'camera'|'target'|'model', id }
   let saveT = 0, dirty = false, history = [], future = [];
   const isMobile = matchMedia('(max-width:760px)').matches;
@@ -84,6 +85,7 @@ export function openEditor(root, store, setId, opts = {}) {
     studio = new Studio(canvas, { quality: isMobile ? 'fast' : 'precise' });
     studio.load(data);
     studio.onHistogram = drawHistogram;
+    studio.onModelReady = () => { if (pendingFrame) { quickFrame(pendingFrame, true); pendingFrame = null; } renderFoot(); };
     window.__ls = { studio, get data() { return data; }, select: s => select(s) }; // aide au débogage
     if (!readOnly) {
       // ordre important : gizmo et glisser-déposer avant l'orbite, pour qu'ils puissent la bloquer
@@ -462,7 +464,9 @@ export function openEditor(root, store, setId, opts = {}) {
         <label class="sw" style="background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red)" title="Couleur personnalisée"><input type="color" id="bgpick" value="${data.background.color}"></label></div>
       <div class="ctl"><label>Murs du studio</label>${chips('walls', ['dark', 'light'], data.studio.walls, v => v === 'dark' ? 'Sombres' : 'Clairs')}</div>
       <div class="ctl"><label>Fumée / brume <b id="vhaze">${Math.round((data.studio.haze || 0) * 100)} %</b></label><input type="range" min="0" max="1" step="0.01" value="${data.studio.haze || 0}" data-range="haze"></div>`);
-    h += sec('Mannequin', 'person', `<div class="ctl" style="margin-top:0"><label>Modèle</label>${chips('gender', ['f', 'm'], m.gender, v => v === 'f' ? 'Femme' : 'Homme')}</div>
+    h += sec('Mannequin', 'person', `<div class="ctl" style="margin-top:0"><label>Rendu du personnage</label>${chips('style', ['real', 'mannequin'], m.style === 'real' ? 'real' : 'mannequin', v => v === 'real' ? 'Réaliste (buste)' : 'Mannequin (en pied)')}
+        ${m.style === 'real' ? '<div class="s" style="font-size:11.5px;color:var(--ink3);margin-top:6px">Buste HD pour les portraits serrés. Pour un plan large, repasse en mannequin.</div>' : ''}</div>
+      <div class="ctl"><label>Modèle</label>${chips('gender', ['f', 'm'], m.gender, v => v === 'f' ? 'Femme' : 'Homme')}</div>
       <div class="ctl"><label>Carnation</label>${chips('skin', Object.keys(SKINS), m.skin, v => SKINS[v].label)}</div>
       <div class="ctl"><label>Distance au fond <b id="vdist">${fr(m.distance)} m</b></label><input type="range" min="0.5" max="5" step="0.1" value="${m.distance}" data-range="distance"></div>
       <div class="ctl"><label>Orientation <b id="vrot">${m.rot || 0}°</b></label><input type="range" min="-180" max="180" step="5" value="${m.rot || 0}" data-range="rot"></div>`);
@@ -503,7 +507,7 @@ export function openEditor(root, store, setId, opts = {}) {
       const b = e.target.closest('.chip'); if (!b) return;
       const k = box.dataset.chips, v = b.dataset.v;
       if (k === 'walls') { data.studio.walls = v; studio.applyBackground(); }
-      else if (k === 'gender' || k === 'skin') { data.model[k] = v; studio.applyModel(); }
+      else if (k === 'gender' || k === 'skin' || k === 'style') { data.model[k] = v; studio.applyModel(); if (k === 'style' && v === 'real') { pendingFrame = 'bust'; quickFrame('bust', true); } }
       else if (k === 'dof') { c.dof = v === 'on'; }
       else { c[k] = k === 'format' ? v : +v; studio.applyCamera(); if (k === 'format') layoutRender(); }
       commit(); buildLibrary();
@@ -526,8 +530,9 @@ export function openEditor(root, store, setId, opts = {}) {
 
   function quickFrame(kind, silent) {
     const c = data.camera, u = studio.model.userData;
-    const H = { face: .42, bust: .75, half: 1.15, full: 2.05 }[kind];
-    const ty = { face: u.headY - .01, bust: u.headY - .2, half: u.headY - .45, full: u.height / 2 + .02 }[kind];
+    const real = data.model.style === 'real';
+    const H = { face: .42, bust: real ? .6 : .75, half: 1.15, full: 2.05 }[kind];
+    const ty = { face: u.headY - .01, bust: u.headY - (real ? .16 : .2), half: u.headY - .45, full: u.height / 2 + .02 }[kind];
     const [, fh] = FORMATS[c.format];
     const dist = c.focal * H / fh;
     const dir = new THREE.Vector3(c.x - c.tx, 0, c.z - c.tz); if (dir.lengthSq() < .01) dir.set(0, 0, 1); dir.normalize();
@@ -674,10 +679,12 @@ export function openEditor(root, store, setId, opts = {}) {
     } else body = `${heightCtl}${aimChips}${orient}`;
     const name = it.type === 'light' && !it.small && it.kind === 'flash' ? MODS[it.mod].label : itemName(it);
     el.innerHTML = `<h4>${icon(it.type === 'light' ? (it.kind === 'flash' ? 'flash' : it.mod === 'window' ? 'window' : 'bulb') : 'reflector')}${esc(name)}<span class="k">${it.type === 'light' ? (it.kind === 'flash' ? 'Flash' : 'Continu') : ''}</span>${close}</h4>
+      ${it.type === 'light' ? `<button class="power-tog ${it.off ? 'off' : ''}" id="ptog" role="switch" aria-checked="${!it.off}"><span class="dot"></span>${it.off ? 'Éteinte' : 'Allumée'}</button>` : ''}
       ${body}
       <div class="row"><button class="btn sm" id="dup">${icon('dup')}Dupliquer</button><button class="btn sm" id="del" style="color:#c62828">${icon('trash')}Supprimer</button></div>`;
     const q = s => el.querySelector(s);
     q('#ix').onclick = () => select(null);
+    if (q('#ptog')) q('#ptog').onclick = () => { if (it.off) delete it.off; else it.off = true; studio.recompute(); commit(); };
     if (q('#mod')) q('#mod').onchange = e => { it.mod = e.target.value; if (!GOBO_MODS.includes(it.mod)) delete it.gobo; studio.syncItems(); commit(); };
     if (q('#gel')) q('#gel').onchange = e => { it.gel = e.target.value === 'none' ? undefined : e.target.value; studio.recompute(); commit({ keepInspector: true }); updateInspectorMeter(); };
     if (q('#gobo')) q('#gobo').onchange = e => { it.gobo = e.target.value || undefined; studio.syncItems(); commit({ keepInspector: true }); };
@@ -715,6 +722,7 @@ export function openEditor(root, store, setId, opts = {}) {
     if (z) { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
     if ((e.key === 'Delete' || e.key === 'Backspace') && sel?.kind === 'item') { data.items = data.items.filter(i => i.id !== sel.id); studio.syncItems(); select(null); commit(); }
     if (e.key === 'Escape') select(null);
+    if (e.key.toLowerCase() === 'l' && sel?.kind === 'item') { const it = data.items.find(i => i.id === sel.id); if (it?.type === 'light') { if (it.off) delete it.off; else it.off = true; studio.recompute(); commit(); } }
   }
 
   return {

@@ -51,7 +51,7 @@ export function drawDiagram(ctx, X, Y, W, H, data) {
   // faisceaux (sous tout le reste)
   const face = [0, .03];
   data.items.forEach(it => {
-    if (it.type !== 'light') return;
+    if (it.type !== 'light' || it.off) return;
     const [lx, lz] = P(it.x, it.z), tgt = it.aim === 'bg' ? [0, -dist] : face, [tx, tz] = P(...tgt);
     const half = Math.min(80, MODS[it.mod].angle / 2) * Math.PI / 180, ang = Math.atan2(tz - lz, tx - lx), len = Math.hypot(tx - lx, tz - lz) * 1.15;
     const gr = ctx.createRadialGradient(lx, lz, 0, lx, lz, len);
@@ -148,7 +148,7 @@ export function sheetInfo(studio, data) {
     return { n: i + 1, type: it.type, name: itemName(it), mod: itemModifier(it),
       power: it.type === 'light' ? `${it.power} ${it.kind === 'flash' ? 'Ws' : 'W'}` : '—', temp: it.type === 'light' ? `${it.kelvin} K` : '—',
       height: it.finish?.startsWith('v') ? '2 m' : `${fr(it.y, 2)} m`, dist: `${fr(d)} m`, angle: azLabel(azimuth(it, cam)),
-      cell: it.type === 'light' ? (m ? fmtF(m) : 'hors faisceau') : (m ? `${fmtF(m)} (rebond)` : '—') };
+      cell: it.type === 'light' ? (it.off ? 'éteinte' : m ? fmtF(m) : 'hors faisceau') : (m ? `${fmtF(m)} (rebond)` : '—') };
   });
   return { expo, ev, rows, meter: meter ? fmtF(meter) : null, subject: fr(studio.subjectDistance()),
     cam: [['Focale', `${cam.focal} mm`], ['Ouverture', fmtF(cam.f)], ['Vitesse', fmtSh(cam.shutter)], ['ISO', String(cam.iso)], ['Balance des blancs', `${cam.wb} K`], ['Format', cam.format], ['Hauteur', `${fr(cam.y, 2)} m`], ['Distance au sujet', `${fr(studio.subjectDistance())} m`]] };

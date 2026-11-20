@@ -141,3 +141,88 @@ export function buildMannequin({ gender = 'f', skin = 'light' }) {
   g.userData = { headY: 1.585 * s, chestY: 1.25 * s, height: 1.72 * s };
   return g;
 }
+
+/* ------------------------------------------------------------------
+   Personnage réaliste (MakeHuman CC0, généré par tools/build_human.py)
+   - buste HD : tête + épaules subdivisées, peau peinte par sommet
+   ------------------------------------------------------------------ */
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const MODELS = new URL('../../models/', import.meta.url).href;
+const gltfCache = {};
+const loadGLB = name => gltfCache[name] ||= new GLTFLoader().loadAsync(MODELS + name + '.glb');
+const loadMeta = name => fetch(MODELS + name + '.json').then(r => r.json());
+
+// peau : diffusion sous la surface simulée (la lumière « déborde » dans l'ombre en rouge)
+function skinMaterial() {
+  const m = new THREE.MeshPhysicalMaterial({
+    vertexColors: true, color: 0xffffff, roughness: 0.5, specularIntensity: 0.55,
+    sheen: 0.25, sheenRoughness: 0.55, sheenColor: new THREE.Color('#ff9a85'),
+    clearcoat: 0.1, clearcoatRoughness: 0.42,
+  });
+  m.onBeforeCompile = sh => {
+    const chunk = THREE.ShaderChunk.lights_physical_pars_fragment
+      .replace('vec3 irradiance = dotNL * directLight.color;',
+        `vec3 irradiance = dotNL * directLight.color;
+         float dNLraw = dot( geometryNormal, directLight.direction );
+         vec3 sssIrr = directLight.color * max( vec3( 0.0 ), vec3( saturate( ( dNLraw + 0.32 ) / 1.32 ), saturate( ( dNLraw + 0.14 ) / 1.14 ), saturate( ( dNLraw + 0.09 ) / 1.09 ) ) - dotNL ) * 0.85;`)
+      .replace('reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );',
+        'reflectedLight.directDiffuse += ( irradiance + sssIrr ) * BRDF_Lambert( material.diffuseColor );');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <lights_physical_pars_fragment>', chunk);
+  };
+  m.customProgramCacheKey = () => 'ls-skin';
+  return m;
+}
+// œil : une sphère brillante (vernis) dont la couleur dessine sclère, iris et pupille → reflets naturels des sources
+function eyeball(r, irisColor) {
+  const geo = new THREE.SphereGeometry(r, 64, 48), pos = geo.attributes.position, col = [];
+  const sclera = new THREE.Color('#c9beb2'), iris = new THREE.Color(irisColor), ring = iris.clone().multiplyScalar(.45), pupil = new THREE.Color('#030303');
+  const v = new THREE.Vector3(), c = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).normalize();
+    const a = Math.acos(THREE.MathUtils.clamp(v.z, -1, 1)) * 180 / Math.PI; // angle depuis l'axe du regard
+    if (a < 9.5) c.copy(pupil);
+    else if (a < 27) c.copy(iris).lerp(ring, THREE.MathUtils.smoothstep(a, 20, 27)).multiplyScalar(.75 + .5 * Math.abs(Math.sin(i * 12.9898) * .5));
+    else c.copy(sclera).lerp(new THREE.Color('#b08a80'), THREE.MathUtils.smoothstep(a, 70, 110) * .5);
+    col.push(c.r, c.g, c.b);
+  }
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  const m = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: .35, clearcoat: 1, clearcoatRoughness: .02 }));
+  const g = new THREE.Group(); g.add(m); return g;
+}
+const HAIR = { light: '#3a291e', medium: '#17110e', dark: '#110d0b' };
+const IRIS = { light: '#5b4a35', medium: '#2b1d14', dark: '#21150f' };
+
+export function buildRealistic({ gender = 'f', skin = 'light' }, onReady) {
+  const g = new THREE.Group(); g.name = 'mannequin';
+  const name = `hd_${gender}_${skin}`;
+  // valeurs provisoires le temps du chargement
+  g.userData = { headY: gender === 'm' ? 1.62 : 1.485, chestY: gender === 'm' ? 1.38 : 1.25, height: gender === 'm' ? 1.75 : 1.61, loading: true };
+  Promise.all([loadGLB(name), loadMeta(name)]).then(([gltf, meta]) => {
+    const skinMat = skinMaterial();
+    gltf.scene.traverse(o => {
+      if (!o.isMesh) return;
+      const mesh = o.clone(); mesh.geometry = o.geometry; mesh.geometry.computeVertexNormals();
+      if (o.name.startsWith('skin')) mesh.material = skinMat;
+      else if (o.name.startsWith('lashes')) mesh.material = new THREE.MeshStandardMaterial({ color: '#1a1410', roughness: .8, side: THREE.DoubleSide });
+      else if (o.name.startsWith('hair')) {
+        const afro = String(meta.hair || '').startsWith('afro');
+        mesh.material = afro
+          ? new THREE.MeshPhysicalMaterial({ vertexColors: !!o.geometry.attributes.color, color: HAIR[skin], roughness: .88, sheen: .35, sheenColor: new THREE.Color('#3a2a22'), sheenRoughness: .6, side: THREE.DoubleSide })
+          : new THREE.MeshPhysicalMaterial({ vertexColors: !!o.geometry.attributes.color, color: HAIR[skin], roughness: .45, clearcoat: .3, clearcoatRoughness: .3, sheen: .5, sheenColor: new THREE.Color('#7a5a45'), sheenRoughness: .3, side: THREE.DoubleSide });
+      }
+      else if (o.name.startsWith('top')) mesh.material = new THREE.MeshStandardMaterial({ color: '#3a3a3a', roughness: .9 });
+      mesh.castShadow = mesh.receiveShadow = true;
+      mesh.userData.pick = { kind: 'model' };
+      g.add(mesh);
+    });
+    for (const s of ['l', 'r']) {
+      const e = eyeball(meta.eyeR * .76, IRIS[skin]); e.position.fromArray(meta.eyes[s]); e.position.z -= meta.eyeR * .2;
+      e.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; o.userData.pick = { kind: 'model' }; } });
+      g.add(e);
+    }
+    const ey = meta.eyes.l[1];
+    g.userData = { headY: ey - 0.015, chestY: ey - 0.27, height: meta.height, loading: false };
+    onReady?.(g);
+  }).catch(e => { console.error('[LS] personnage non chargé', e); });
+  return g;
+}

@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { RectAreaLightUniformsLib } from 'three/addons/RectAreaLightUniformsLib.js';
 import { MODS, FORMATS, GELS } from './defaults.js';
-import { buildMannequin } from './mannequin.js';
+import { buildMannequin, buildRealistic } from './mannequin.js';
 
 RectAreaLightUniformsLib.init();
 const HELP = 1;           // calque des aides (invisible dans le rendu)
@@ -204,7 +204,7 @@ export class Studio {
     // caméras
     this.view = new THREE.PerspectiveCamera(40, 1, 0.05, 100);
     this.view.layers.enable(HELP);
-    this.shot = new THREE.PerspectiveCamera(20, 0.8, 0.05, 60);
+    this.shot = new THREE.PerspectiveCamera(20, 0.8, 0.25, 40); // near/far serrés : meilleure précision de profondeur
 
     // rendu de la prise de vue via une cible intermédiaire (profondeur de champ)
     this.rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4, depthTexture: new THREE.DepthTexture(4, 4) });
@@ -273,11 +273,17 @@ export class Studio {
     this.recompute();
   }
   applyModel() {
-    const m = this.data.model, key = m.gender + m.skin;
+    const m = this.data.model, style = m.style === 'real' ? 'real' : 'mannequin', key = style + m.gender + m.skin;
     if (this.modelKey !== key) {
-      if (this.model) { this.scene.remove(this.model); this.model.traverse(o => o.geometry?.dispose()); }
-      this.model = buildMannequin(m); this.modelKey = key;
-      this.model.traverse(o => { if (o.isMesh) o.userData.pick = { kind: 'model' }; });
+      if (this.model) { this.scene.remove(this.model); if (this.model.userData.procedural) this.model.traverse(o => o.geometry?.dispose()); }
+      if (style === 'real') {
+        // chargement asynchrone : on réaligne les lumières une fois le modèle prêt
+        this.model = buildRealistic(m, () => { if (this.modelKey === key) { this.syncItems(); this.onModelReady?.(); } });
+      } else {
+        this.model = buildMannequin(m); this.model.userData.procedural = true;
+        this.model.traverse(o => { if (o.isMesh) o.userData.pick = { kind: 'model' }; });
+      }
+      this.modelKey = key;
       this.scene.add(this.model);
     }
     this.model.rotation.y = (m.rot || 0) * DEG;
@@ -431,8 +437,8 @@ export class Studio {
   illuminanceAt(p, n, skipId) {
     let E = 0; const col = new THREE.Color(0, 0, 0);
     for (const lt of this.data.items) {
-      if (lt.type !== 'light' || lt.id === skipId) continue;
-      const lo = this.items.get(lt.id); if (!lo || !lo.I) continue;
+      if (lt.type !== 'light' || lt.id === skipId || lt.off) continue;
+      const lo = this.items.get(lt.id); if (!lo || !lo.I || !lo.spots.length) continue;
       const v = p.clone().sub(lo.pos); const d2 = Math.max(.25, v.lengthSq()); v.normalize();
       const cosR = Math.max(0, -v.dot(n));
       const half = Math.min(85, (lt.mod === 'fresnel' ? (lt.zoom || 30) : MODS[lt.mod].angle) / 2) * DEG;
@@ -449,7 +455,12 @@ export class Studio {
     let flux = 0;
     // lumières
     for (const it of this.data.items) {
-      const o = this.items.get(it.id); if (!o || it.type !== 'light') continue;
+      const o = this.items.get(it.id); if (!o || it.type !== 'light' || !o.spots.length) continue;
+      // lumière éteinte : plus d'émission, plus d'ombre, surface émettrice sombre
+      for (const sp of o.spots) sp.visible = !it.off;
+      if (o.rect) o.rect.visible = !it.off;
+      if (o.cone) o.cone.visible = !it.off;
+      if (it.off) { o.I = 0; o.col = new THREE.Color(1, 1, 1); o.emit.material.color.set(0x2a2a2a); continue; }
       const m = MODS[it.mod], gel = gelTransmission(it.gel), gl = lumOf(gel);
       const I = this.axisIntensity(it) * gl, col = lightColor(it.kelvin || 5600, wb).multiply(gel).multiplyScalar(1 / Math.max(1e-4, gl));
       const frac = m.area ? m.frac : 0;
@@ -465,7 +476,7 @@ export class Studio {
     }
     // réflecteurs : éclairement reçu → rebond diffus
     for (const it of this.data.items) {
-      const o = this.items.get(it.id); if (!o || it.type !== 'refl' || !o.rect) continue;
+      const o = this.items.get(it.id); if (!o || it.type !== 'refl' || !o.rect || o.spots.length) continue;
       const { E, col } = this.illuminanceAt(o.pos, o.dir);
       const rho = { white: .8, silver: 1.15, gold: 1.05, vwhite: .8 }[it.finish] || .8;
       const tint = it.finish === 'gold' ? new THREE.Color(1.0, .78, .45) : new THREE.Color(1, 1, 1);
@@ -492,8 +503,8 @@ export class Studio {
     this.fog.density = haze * 0.1;
     this.fog.color.copy(this.wallColor).lerp(new THREE.Color(1, 1, 1), .15).multiplyScalar(Math.min(1, .3 + flux / 40));
     for (const it of this.data.items) {
-      const o = this.items.get(it.id); if (!o?.beam) continue;
-      o.beam.visible = haze > 0.001;
+      const o = this.items.get(it.id); if (!o?.beam || it.type !== 'light') continue;
+      o.beam.visible = haze > 0.001 && !it.off;
       o.beam.material.uniforms.uColor.value.copy(o.col);
       o.beam.material.uniforms.uStrength.value = haze * Math.min(1.2, o.I / 25) * 0.35;
     }
@@ -534,6 +545,7 @@ export class Studio {
     let E = 0;
     for (const it of this.data.items) {
       if (onlyId && it.id !== onlyId) continue;
+      if (it.off) continue;
       const o = this.items.get(it.id); if (!o) continue;
       if (it.type === 'light') {
         const m = MODS[it.mod], v = face.clone().sub(o.pos), d2 = Math.max(.04, v.lengthSq()); v.normalize();

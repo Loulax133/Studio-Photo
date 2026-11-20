@@ -88,6 +88,7 @@ export function itemName(it) {
   return 'Flash studio';
 }
 export function itemModifier(it) {
+  if (it.type === 'light' && it.off) return 'Éteinte';
   if (it.type !== 'light') return (it.yaw || it.pitch) ? `Tourné ${it.yaw || 0}° / ${it.pitch || 0}°` : '—';
   let s = it.small ? 'Tête nue' : it.kind === 'cont' ? (it.mod === 'fresnel' ? `Faisceau ${it.zoom || 30}°` : '') : MODS[it.mod].label;
   const extra = [];
@@ -143,7 +144,7 @@ export function normalizeScene(src) {
     background: { color: hexOk(s.background?.color) ? s.background.color : def.background.color },
     studio: { walls: s.studio?.walls === 'light' ? 'light' : 'dark', haze: num(s.studio?.haze, 0, 0, 1) },
     model: {
-      gender: s.model?.gender === 'm' ? 'm' : 'f', skin: SKINS[s.model?.skin] ? s.model.skin : 'light',
+      gender: s.model?.gender === 'm' ? 'm' : 'f', skin: SKINS[s.model?.skin] ? s.model.skin : 'light', style: s.model?.style === 'real' ? 'real' : 'mannequin',
       distance: num(s.model?.distance, def.model.distance, .5, 5), rot: num(s.model?.rot, 0, -180, 180),
     },
     camera: { ...def.camera },
@@ -164,6 +165,7 @@ export function normalizeScene(src) {
     if (it.small || mod === 'bare_small') { l.small = true; l.mod = 'bare_small'; }
     if (mod === 'fresnel') l.zoom = num(it.zoom, 30, 12, 55);
     if (GELS[it.gel] && it.gel !== 'none') l.gel = it.gel;
+    if (it.off) l.off = true;
     if (GOBOS[it.gobo] && it.gobo && GOBO_MODS.includes(l.mod)) l.gobo = it.gobo;
     out.items.push(l);
   }
