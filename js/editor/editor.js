@@ -42,6 +42,7 @@ export function openEditor(root, store, setId) {
         <button class="btn ghost icon sm hide-m" id="rsize" title="Taille">${icon('max')}</button>
         <button class="btn ghost icon sm" id="rmin" title="Réduire">${icon('min')}</button></div>
       <div class="render-view" id="rview"></div>
+      <div class="hist" id="rhist"><canvas id="histc" aria-label="Histogramme du rendu"></canvas><div class="hist-warn" id="histw"></div></div>
       <div class="render-foot" id="rfoot"></div>
     </section>
     <section class="float insp hidden" id="insp"></section>
@@ -63,6 +64,7 @@ export function openEditor(root, store, setId) {
   function init() {
     studio = new Studio(canvas);
     studio.load(data);
+    studio.onHistogram = drawHistogram;
     window.__ls = { studio, get data() { return data; }, select: s => select(s) }; // aide au débogage
     // ordre important : gizmo et glisser-déposer avant l'orbite, pour qu'ils puissent la bloquer
     gizmo = new TransformControls(studio.view, canvas);
@@ -100,8 +102,32 @@ export function openEditor(root, store, setId) {
       const r = rview.getBoundingClientRect();
       rect = { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
     }
+    if (rect && performance.now() - lastHist > 350) { studio.wantHist = true; lastHist = performance.now(); }
     studio.render(rect);
     placeInspector();
+  }
+  let lastHist = 0;
+  function drawHistogram(h) {
+    const cv = $('#histc'); if (!cv) return;
+    const w = cv.clientWidth, ht = cv.clientHeight, dpr = Math.min(devicePixelRatio, 2);
+    if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(ht * dpr); }
+    const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, ht);
+    // repères des zones (1/4, 1/2, 3/4)
+    ctx.strokeStyle = '#ececea'; ctx.lineWidth = 1;
+    for (const k of [.25, .5, .75]) { ctx.beginPath(); ctx.moveTo(Math.round(w * k) + .5, 0); ctx.lineTo(Math.round(w * k) + .5, ht); ctx.stroke(); }
+    const B = h.lum.length, max = Math.max(1, ...Array.from(h.lum).slice(1, B - 1), ...Array.from(h.rc).slice(1, B - 1), ...Array.from(h.gc).slice(1, B - 1), ...Array.from(h.bc).slice(1, B - 1));
+    const y = v => ht - Math.min(1, Math.sqrt(v / max)) * (ht - 2);
+    const path = arr => { ctx.beginPath(); ctx.moveTo(0, ht); for (let i = 0; i < B; i++) ctx.lineTo(i / (B - 1) * w, y(arr[i])); ctx.lineTo(w, ht); ctx.closePath(); };
+    ctx.globalCompositeOperation = 'multiply';
+    [['rc', 'rgba(230,70,60,.28)'], ['gc', 'rgba(60,170,90,.28)'], ['bc', 'rgba(60,110,230,.28)']].forEach(([k, c]) => { path(h[k]); ctx.fillStyle = c; ctx.fill(); });
+    ctx.globalCompositeOperation = 'source-over';
+    path(h.lum); ctx.fillStyle = 'rgba(17,17,17,.55)'; ctx.fill();
+    // écrêtage
+    const warn = [];
+    if (h.hi > 0.005) warn.push(`<span class="hot">Hautes lumières cramées : ${(h.hi * 100).toFixed(h.hi < .1 ? 1 : 0).replace('.', ',')} %</span>`);
+    if (h.lo > 0.02) warn.push(`<span>Noirs bouchés : ${(h.lo * 100).toFixed(h.lo < .1 ? 1 : 0).replace('.', ',')} %</span>`);
+    $('#histw').innerHTML = warn.join('');
+    $('#rhist').classList.toggle('clip-hi', h.hi > 0.005);
   }
   function placeInspector() {
     const el = $('#insp'); if (isMobile || el.classList.contains('hidden')) return;
@@ -201,19 +227,34 @@ export function openEditor(root, store, setId) {
     $('#rmin').onclick = () => { renderBox.classList.toggle('min'); };
     renderFoot();
   }
+  const THIRDS = [1.4, 1.6, 1.8, 2, 2.2, 2.5, 2.8, 3.2, 3.5, 4, 4.5, 5, 5.6, 6.3, 7.1, 8, 9, 10, 11, 13, 14, 16, 18, 20, 22, 25, 29, 32];
+  const nearestThird = f => THIRDS.reduce((a, b) => Math.abs(Math.log2(b / f)) < Math.abs(Math.log2(a / f)) ? b : a);
   function renderFoot() {
     if (!studio) return;
     const c = data.camera, m = studio.meter();
-    let expo = '';
-    if (m) {
-      const ev = 2 * Math.log2(m / c.f);
-      expo = Math.abs(ev) < 0.34 ? 'juste' : (ev > 0 ? '+' : '') + ev.toFixed(1).replace('.', ',') + ' IL';
-    }
     const flashOn = data.items.some(i => i.type === 'light' && i.kind === 'flash');
-    $('#rfoot').innerHTML = `<span><b>${c.focal} mm</b></span><span><b>${fmtF(c.f)}</b></span><span><b>${fmtSh(c.shutter)}</b></span><span>ISO <b>${c.iso}</b></span>
+    // indicateur d'exposition façon viseur : -3 … 0 … +3 IL
+    let meterHtml = '';
+    if (m) {
+      const ev = 2 * Math.log2(m / c.f), cl = Math.max(-3, Math.min(3, ev));
+      const ok = Math.abs(ev) < 0.34, warn = Math.abs(ev) < 1.01;
+      const state = ok ? 'ok' : warn ? 'warn' : 'bad';
+      const label = ok ? 'Exposition juste' : `${ev > 0 ? 'Surexposé' : 'Sous-exposé'} de ${Math.abs(ev).toFixed(1).replace('.', ',')} IL${Math.abs(ev) > 3 ? ' (hors échelle)' : ''}`;
+      const ticks = Array.from({ length: 19 }, (_, i) => { const v = -3 + i / 3, major = i % 3 === 0; return `<i class="${major ? 'M' : ''}" style="left:${(v + 3) / 6 * 100}%"></i>`; }).join('');
+      const nums = [-3, -2, -1, 0, 1, 2, 3].map(v => `<span style="left:${(v + 3) / 6 * 100}%">${v > 0 ? '+' + v : v === 0 ? '0' : '−' + -v}</span>`).join('');
+      const adv = nearestThird(m);
+      meterHtml = `<div class="expo ${state}">
+        <div class="expo-top"><b>${label}</b>${ok ? '' : `<button class="btn sm" id="fixexpo" title="Régler l'ouverture sur la valeur de la cellule">Passer à ${fmtF(adv)}</button>`}</div>
+        <div class="expo-scale">${ticks}<em style="left:${(cl + 3) / 6 * 100}%"></em></div>
+        <div class="expo-nums">${nums}</div>
+      </div>`;
+    } else meterHtml = '<div class="expo"><div class="expo-top"><b>Aucune lumière dans le set</b></div></div>';
+    $('#rfoot').innerHTML = `${meterHtml}<div class="foot-meta"><span><b>${c.focal} mm</b></span><span><b>${fmtF(c.f)}</b></span><span><b>${fmtSh(c.shutter)}</b></span><span>ISO <b>${c.iso}</b></span>
       <span>Sujet à <b>${studio.subjectDistance().toFixed(1).replace('.', ',')} m</b></span>
-      ${m ? `<span>Cellule <b>${fmtF(m)}</b> (${expo})</span>` : '<span>Aucune lumière</span>'}
-      ${flashOn && c.shutter < 1 / 250 - 1e-6 ? '<span style="color:#c62828">Au-delà de la synchro flash</span>' : ''}`;
+      ${m ? `<span>Cellule <b>${fmtF(m)}</b></span>` : ''}
+      ${flashOn && c.shutter < 1 / 250 - 1e-6 ? '<span style="color:#c62828">Au-delà de la synchro flash</span>' : ''}</div>`;
+    const fx = $('#fixexpo');
+    if (fx) fx.onclick = () => { c.f = nearestThird(m); studio.applyCamera(); commit({ keepInspector: true }); buildLibrary(); toast(`Ouverture réglée à ${fmtF(c.f)}`); };
   }
 
   /* ---------------- bibliothèque (gauche) ---------------- */

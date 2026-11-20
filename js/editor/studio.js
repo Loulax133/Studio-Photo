@@ -383,8 +383,27 @@ export class Studio {
       r.setScissor(rect.x, y, rect.w, rect.h); r.setViewport(rect.x, y, rect.w, rect.h);
       this.scene.background = this.wallColor;
       r.render(this.scene, this.shot);
+      if (this.wantHist) { this.wantHist = false; this._histogram(rect.x, y, rect.w, rect.h); }
       r.setScissorTest(false);
     }
+  }
+  // histogramme du rendu : lu directement dans l'image affichée (après tone mapping)
+  _histogram(x, y, w, h) {
+    const gl = this.renderer.getContext(), pr = this.renderer.getPixelRatio();
+    const X = Math.round(x * pr), Y = Math.round(y * pr), W = Math.round(w * pr), H = Math.round(h * pr);
+    const n = W * H * 4;
+    if (!this._px || this._px.length < n) this._px = new Uint8Array(n);
+    gl.readPixels(X, Y, W, H, gl.RGBA, gl.UNSIGNED_BYTE, this._px);
+    const B = 64, lum = new Uint32Array(B), rc = new Uint32Array(B), gc = new Uint32Array(B), bc = new Uint32Array(B);
+    let hi = 0, lo = 0, tot = 0;
+    const step = Math.max(1, Math.floor((W * H) / 40000)) * 4, px = this._px;
+    for (let i = 0; i < n; i += step) {
+      const R = px[i], G = px[i + 1], Bl = px[i + 2], L = 0.2126 * R + 0.7152 * G + 0.0722 * Bl;
+      lum[L >> 2]++; rc[R >> 2]++; gc[G >> 2]++; bc[Bl >> 2]++; tot++;
+      if (R >= 253 || G >= 253 || Bl >= 253) hi++;
+      if (L <= 3) lo++;
+    }
+    this.onHistogram?.({ lum, rc, gc, bc, tot, hi: hi / tot, lo: lo / tot });
   }
   // rendu haute définition dans un canvas séparé (export / vignette)
   capture(longEdge = 2400, type = 'image/jpeg', q = .92) {

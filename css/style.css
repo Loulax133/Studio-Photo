@@ -176,3 +176,30 @@ select.field{height:36px;font-size:13px}
 button.brand{font:inherit;font-weight:600;font-size:16px}
 .lbl{display:block;font-size:12px;color:var(--ink2);margin:12px 0 6px}
 .modal .lbl:first-of-type{margin-top:0}
+
+/* indicateur d'exposition (façon viseur) */
+.render-foot{display:block}
+.foot-meta{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px}
+.expo{--c:#1f9d55;width:100%}
+.expo.warn{--c:#d98a00}.expo.bad{--c:#d32f2f}
+.expo-top{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:32px}
+.expo-top b{color:var(--c);font-weight:600;font-size:12.5px}
+.expo-top .btn{height:28px;font-size:12px;padding:0 10px}
+.expo-scale{position:relative;height:16px;margin:4px 6px 0;border-bottom:1.5px solid var(--line2)}
+.expo-scale i{position:absolute;bottom:0;width:1.5px;height:5px;background:var(--line2);transform:translateX(-50%)}
+.expo-scale i.M{height:9px;background:var(--ink3)}
+.expo-scale em{position:absolute;bottom:-4px;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:9px solid var(--c);transform:translateX(-50%);transition:left .15s}
+.expo-nums{position:relative;height:16px;margin:2px 6px 0;font-size:10.5px;color:var(--ink3)}
+.expo-nums span{position:absolute;transform:translateX(-50%)}
+@media (max-width:760px){.expo-top b{font-size:11px}.expo-top .btn{height:26px;font-size:11px;padding:0 8px}.foot-meta{display:none}}
+
+/* histogramme */
+.hist{position:relative;margin:0 -8px;padding:10px 22px 0;background:#fff}
+.hist canvas{display:block;width:100%;height:56px;border-bottom:1.5px solid var(--line2)}
+.hist.clip-hi canvas{box-shadow:inset -3px 0 0 #d32f2f}
+.hist-warn{display:flex;flex-wrap:wrap;gap:2px 12px;font-size:11.5px;color:var(--ink2);min-height:0;padding-top:6px}
+.hist-warn:empty{padding-top:0}
+.hist-warn .hot{color:#d32f2f;font-weight:500}
+.render.min .hist{display:none}
+.render-foot{padding-top:6px}
+@media (max-width:760px){.hist{padding:6px 14px 0}.hist canvas{height:34px}.hist-warn{font-size:10.5px}}
