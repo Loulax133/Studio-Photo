@@ -130,3 +130,49 @@ export const PRESETS = [
   { key: 'highkey', label: 'High key', desc: 'Fond blanc éclatant', build: d => ({ bg: '#f4f4f2', walls: 'light', items: [L('k', 'octa', 100, 0, 2.35, 1.25), L('b1', 'softbox', 320, -1.15, 1.6, -d + .9, { aim: 'bg' }), L('b2', 'softbox', 320, 1.15, 1.6, -d + .9, { aim: 'bg' }), R('f', 'white', 0, .8, .8)] }) },
   { key: 'lowkey', label: 'Low key', desc: 'Fond noir, lumière sculptée', build: () => ({ bg: '#111111', walls: 'dark', items: [L('k', 'grid', 100, -1.3, 2.05, .55), R('n', 'vblack', 1.1, 1, .3)] }) },
 ];
+
+// ---------- fichier de set (.lightset) ----------
+// { "format": "lightstudio-set", "version": 1, "name": "…", "scene": { background, studio, model, camera, items } }
+export const SET_FORMAT = 'lightstudio-set';
+const num = (v, d, lo = -Infinity, hi = Infinity) => { v = +v; return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
+export function normalizeScene(src) {
+  const def = defaultScene(), s = src && typeof src === 'object' ? src : {};
+  const hexOk = c => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
+  const out = {
+    v: 1,
+    background: { color: hexOk(s.background?.color) ? s.background.color : def.background.color },
+    studio: { walls: s.studio?.walls === 'light' ? 'light' : 'dark', haze: num(s.studio?.haze, 0, 0, 1) },
+    model: {
+      gender: s.model?.gender === 'm' ? 'm' : 'f', skin: SKINS[s.model?.skin] ? s.model.skin : 'light',
+      distance: num(s.model?.distance, def.model.distance, .5, 5), rot: num(s.model?.rot, 0, -180, 180),
+    },
+    camera: { ...def.camera },
+    items: [],
+  };
+  const c = s.camera || {};
+  for (const k of ['x', 'y', 'z', 'tx', 'ty', 'tz']) out.camera[k] = num(c[k], def.camera[k], -10, 10);
+  out.camera.focal = num(c.focal, 85, 10, 300); out.camera.f = num(c.f, 11, 1, 32); out.camera.iso = num(c.iso, 100, 50, 25600);
+  out.camera.shutter = num(c.shutter, 1 / 125, 1 / 8000, 30); out.camera.wb = num(c.wb, 5600, 2500, 10000);
+  out.camera.format = FORMATS[c.format] ? c.format : '4:5'; out.camera.dof = c.dof !== false;
+  for (const it of Array.isArray(s.items) ? s.items.slice(0, 16) : []) {
+    const base = { id: Math.random().toString(36).slice(2, 9), x: num(it.x, 0, -8, 8), y: num(it.y, 1.9, .2, 4.2), z: num(it.z, 1.5, -8, 8),
+      aim: ['face', 'chest', 'bg'].includes(it.aim) ? it.aim : 'face', yaw: num(it.yaw, 0, -90, 90), pitch: num(it.pitch, 0, -60, 60) };
+    if (it.type === 'refl') { if (FINISHES[it.finish]) out.items.push({ ...base, type: 'refl', finish: it.finish }); continue; }
+    const mod = MODS[it.mod] ? it.mod : 'standard';
+    const kind = it.kind === 'cont' || ['fresnel', 'panel', 'tube', 'window'].includes(mod) ? 'cont' : 'flash';
+    const l = { ...base, type: 'light', kind, mod, power: num(it.power, 200, 5, 3000), kelvin: num(it.kelvin, kind === 'cont' && mod === 'fresnel' ? 3200 : 5600, 2700, 6500) };
+    if (it.small || mod === 'bare_small') { l.small = true; l.mod = 'bare_small'; }
+    if (mod === 'fresnel') l.zoom = num(it.zoom, 30, 12, 55);
+    if (GELS[it.gel] && it.gel !== 'none') l.gel = it.gel;
+    if (GOBOS[it.gobo] && it.gobo && GOBO_MODS.includes(l.mod)) l.gobo = it.gobo;
+    out.items.push(l);
+  }
+  return out;
+}
+export function parseSetFile(text) {
+  const j = JSON.parse(text);
+  if (j && j.format === SET_FORMAT) return { name: String(j.name || 'Set importé').slice(0, 80), scene: normalizeScene(j.scene) };
+  if (j && (Array.isArray(j.items) || j.camera)) return { name: 'Set importé', scene: normalizeScene(j) }; // scène seule
+  throw new Error('format');
+}
+export function makeSetFile(name, scene) { return JSON.stringify({ format: SET_FORMAT, version: 1, name, scene }, null, 2); }

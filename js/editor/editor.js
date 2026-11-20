@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/OrbitControls.js';
 import { TransformControls } from 'three/addons/TransformControls.js';
 import { Studio } from './studio.js';
-import { LIBRARY, MODS, FLASH_MODS, BACKGROUNDS, SKINS, FOCALS, FORMATS, APERTURES, ISOS, SHUTTERS, WBS, GELS, GOBOS, GOBO_MODS, PRESETS, defaultScene, itemName } from './defaults.js';
-import { buildSheet } from './sheet.js';
+import { LIBRARY, MODS, FLASH_MODS, BACKGROUNDS, SKINS, FOCALS, FORMATS, APERTURES, ISOS, SHUTTERS, WBS, GELS, GOBOS, GOBO_MODS, PRESETS, defaultScene, itemName, makeSetFile } from './defaults.js';
+import { buildSheet, sheetInfo } from './sheet.js';
 import { parseScene } from '../store.js';
 import { icon, esc, toast, modal, popMenu } from '../ui.js';
 
@@ -34,6 +34,7 @@ export function openEditor(root, store, setId, opts = {}) {
         <button class="btn ghost icon sm" id="redo" title="Rétablir (Ctrl+Maj+Z)">${icon('redo')}</button>
       </div>`}
       <div class="grow"></div>
+      ${opts.onFiche ? `<div class="pill"><button class="btn ghost sm" id="tofiche" title="Vue fiche">${icon('layers')}Fiche</button></div>` : ''}
       <div class="pill"><div class="seg" id="viewseg"><button data-v="3d" class="on">3D</button><button data-v="top">Schéma</button></div></div>
       ${!readOnly && store.canShare ? `<div class="pill"><button class="btn ghost sm" id="share" title="Partager">${icon('share')}<span class="hide-m">Partager</span></button></div>` : ''}
       <div class="pill"><button class="btn ghost sm" id="export" title="Exporter">${icon('download')}<span class="hide-m">Exporter</span></button></div>
@@ -50,7 +51,7 @@ export function openEditor(root, store, setId, opts = {}) {
         <button class="btn ghost icon sm" id="rmin" title="Réduire">${icon('min')}</button></div>
       <div class="render-view" id="rview">
         <div class="thirds hidden" id="thirds"><i></i><i></i><i></i><i></i></div>
-        <div class="ab hidden" id="abwrap"><img id="abimg" alt=""><div class="ab-bar" id="abbar"><span>Avant</span><span>Maintenant</span></div></div>
+        <div class="ab hidden" id="abwrap"><img id="abimg" alt=""><div class="ab-bar" id="abbar"><span id="ablA">Avant</span><span>Maintenant</span></div></div>
       </div>
       <div class="hist" id="rhist"><canvas id="histc" aria-label="Histogramme du rendu"></canvas><div class="hist-warn" id="histw"></div></div>
       <div class="render-foot" id="rfoot"></div>
@@ -182,7 +183,10 @@ export function openEditor(root, store, setId, opts = {}) {
       const thumb = studio.capture(480, 'image/jpeg', .72);
       const name = $('#name').value.trim() || set.name; set.name = name;
       await store.updateSet(set.id, { scene: data, thumb, name });
-      if (set.shareId) store.publishShare(set.shareId, set, data, thumb).catch(e => console.warn('[LS] partage non mis à jour', e));
+      // rendu + réglages pour la vue fiche du téléphone et le lien de partage
+      const render = { img: studio.capture(1000, 'image/jpeg', .82), info: sheetInfo(studio, data) };
+      store.saveRender?.(set.id, render).catch(e => console.warn('[LS] rendu non enregistré', e));
+      if (set.shareId) store.publishShare(set.shareId, set, data, thumb, render).catch(e => console.warn('[LS] partage non mis à jour', e));
       setStatus('Enregistré');
     } catch (e) { console.error(e); dirty = true; setStatus('Hors ligne — réessai…'); saveT = setTimeout(save, 5000); }
   }
@@ -204,7 +208,12 @@ export function openEditor(root, store, setId, opts = {}) {
     $('#viewseg').onclick = e => { const b = e.target.closest('button'); if (!b) return; setView(b.dataset.v); };
     $('#export').onclick = e => popMenu(e.currentTarget, [
       { icon: 'layers', label: 'Fiche du set (schéma + réglages + rendu)', run: exportSheet },
-      { icon: 'frame', label: 'Rendu seul (JPG 2400 px)', run: () => { download(studio.capture(2400, 'image/jpeg', .93), ($('#name').value || 'rendu') + '.jpg'); toast('Rendu exporté'); } }]);
+      { icon: 'frame', label: 'Rendu seul (JPG 2400 px)', run: () => { download(studio.capture(2400, 'image/jpeg', .93), ($('#name').value || 'rendu') + '.jpg'); toast('Rendu exporté'); } },
+      { icon: 'download', label: 'Fichier du set (.lightset)', run: () => {
+        const name = $('#name').value || set.name, blob = new Blob([makeSetFile(name, data)], { type: 'application/json' });
+        download(URL.createObjectURL(blob), name + '.lightset'); toast('Fichier du set exporté');
+      } }]);
+    if ($('#tofiche')) $('#tofiche').onclick = async () => { clearTimeout(saveT); await save(); opts.onFiche(); };
   }
   function download(url, name) { const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
   async function exportSheet() {
@@ -251,7 +260,7 @@ export function openEditor(root, store, setId, opts = {}) {
         draw(true);
         try {
           const thumb = studio.capture(480, 'image/jpeg', .72);
-          set.shareId = await store.publishShare(null, set, data, thumb);
+          set.shareId = await store.publishShare(null, set, data, thumb, { img: studio.capture(1000, 'image/jpeg', .82), info: sheetInfo(studio, data) });
           await store.updateSet(set.id, { shareId: set.shareId });
         } catch (e) { console.error(e); toast('Impossible de créer le lien. As-tu mis à jour les règles Firestore ?', 5000); set.shareId = null; }
         draw();
@@ -293,7 +302,7 @@ export function openEditor(root, store, setId, opts = {}) {
     $('#rab').onclick = e => {
       const wrap = $('#abwrap'), btn = e.currentTarget;
       if (!wrap.classList.contains('hidden')) { wrap.classList.add('hidden'); btn.classList.remove('on'); return; }
-      $('#abimg').src = studio.capture(900, 'image/jpeg', .9);
+      $('#abimg').src = studio.capture(900, 'image/jpeg', .9); $('#ablA').textContent = 'Avant';
       wrap.style.setProperty('--ab', '50%'); wrap.classList.remove('hidden'); btn.classList.add('on');
       toast('Rendu figé à gauche : modifie ta lumière pour comparer');
     };
@@ -371,6 +380,72 @@ export function openEditor(root, store, setId, opts = {}) {
     } catch (e) { console.error(e); toast('Impossible d\'enregistrer le schéma'); }
   }
 
+  /* ---------------- schéma depuis une photo ---------------- */
+  function photoDialog() {
+    const mr = document.getElementById('modal-root');
+    mr.innerHTML = `<div class="modal-bg"><div class="modal photo-modal">
+      <h3>Recréer la lumière d'une photo</h3>
+      <p>Choisis un portrait où le visage est bien visible. L'analyse se fait dans ton navigateur : direction et douceur de la lumière principale, contraste, contre-jour, reflets dans les yeux et fond. C'est un point de départ à ajuster.</p>
+      <label class="btn primary" style="width:100%">${icon('frame')}Choisir une photo<input type="file" accept="image/*" id="phfile" hidden></label>
+      <div id="phout"></div>
+      <div class="row"><button class="btn" data-x>Fermer</button></div>
+    </div></div>`;
+    const close = () => mr.innerHTML = '';
+    mr.querySelector('[data-x]').onclick = close;
+    mr.querySelector('.modal-bg').onclick = e => { if (e.target.classList.contains('modal-bg')) close(); };
+    mr.querySelector('#phfile').onchange = async e => {
+      const f = e.target.files?.[0]; if (!f) return;
+      const out = mr.querySelector('#phout');
+      out.innerHTML = '<p class="ph-wait">Analyse en cours… (la première fois, le module de détection du visage se charge, ~18 Mo)</p>';
+      try {
+        const url = URL.createObjectURL(f), img = new Image(); img.src = url; await img.decode();
+        const ph = await import('./photo.js');
+        const an = await ph.analyzePhoto(img);
+        if (!an.ok) { out.innerHTML = '<p class="ph-err">Aucun visage détecté. Essaie un portrait de face ou de 3/4, visage net et pas trop petit.</p>'; return; }
+        const sc = ph.analysisToScene(an, data), lines = ph.describeAnalysis(an, sc);
+        // aperçu : photo + points du visage + flèche de la lumière principale
+        const pv = document.createElement('canvas'), k = Math.min(1, 460 / an.W); pv.width = an.W * k; pv.height = an.H * k;
+        const c2 = pv.getContext('2d'); c2.drawImage(an.canvas, 0, 0, pv.width, pv.height);
+        c2.fillStyle = 'rgba(47,107,255,.55)'; for (const [x, y] of an.points) { c2.fillRect(x * k - 1, y * k - 1, 2, 2); }
+        out.innerHTML = `<div class="ph-prev"></div><ul class="ph-lines">${lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>
+          <p class="ph-note">Fiabilité : ${an.quality < .12 ? 'bonne' : an.quality < .2 ? 'moyenne' : 'faible (photo complexe, à ajuster)'}. La puissance est réglée pour une exposition juste à ${fmtF(data.camera.f)}.</p>
+          <button class="btn primary" id="phgo" style="width:100%;margin-top:10px">Créer ce schéma</button>`;
+        out.querySelector('.ph-prev').appendChild(pv);
+        out.querySelector('#phgo').onclick = async () => {
+          if (data.items.length && !await modal({ title: 'Remplacer le schéma actuel ?', text: 'Les lumières actuelles seront remplacées (Ctrl+Z pour annuler).', ok: 'Remplacer' })) return;
+          applyPhotoScene(sc, url);
+        };
+      } catch (err) {
+        console.error(err);
+        out.innerHTML = '<p class="ph-err">L\'analyse n\'a pas pu se lancer (module de détection non chargé). Vérifie ta connexion et réessaie.</p>';
+      }
+    };
+  }
+  function applyPhotoScene(sc, photoUrl) {
+    document.getElementById('modal-root').innerHTML = '';
+    select(null);
+    data.items = sc.items.map(i => { const { role, ratioEV, ...rest } = i; return rest; });
+    data.background.color = sc.background; data.studio.walls = sc.walls;
+    studio.applyBackground(); studio.syncItems();
+    quickFrame(sc.framing, true);
+    balanceExposure();
+    // débouchage : on respecte le contraste mesuré sur la photo
+    const key = sc.items.find(i => i.role === 'key'), fill = sc.items.find(i => i.role === 'fill');
+    if (key && fill) {
+      const kId = data.items[sc.items.indexOf(key)].id, fIt = data.items[sc.items.indexOf(fill)];
+      const mk = studio.meter(kId), mf = studio.meter(fIt.id);
+      if (mk && mf) {
+        const want = 1 / Math.max(.05, 2 ** fill.ratioEV - 1), have = (mf / mk) ** 2;
+        fIt.power = Math.max(5, Math.min(1200, Math.round(fIt.power * want / have)));
+        studio.syncItems(); balanceExposure();
+      }
+    }
+    commit(); buildLibrary();
+    // la photo devient l'image « Avant » de la comparaison
+    const wrap = $('#abwrap'); $('#abimg').src = photoUrl; $('#ablA').textContent = 'Photo'; wrap.style.setProperty('--ab', '50%'); wrap.classList.remove('hidden'); $('#rab').classList.add('on');
+    toast('Schéma créé : compare avec ta photo dans la fenêtre de rendu', 4000);
+  }
+
   /* ---------------- bibliothèque (gauche) ---------------- */
   const openSecs = new Set(['Schémas', 'Lumières']);
   function buildLibrary() {
@@ -381,7 +456,8 @@ export function openEditor(root, store, setId, opts = {}) {
     let h = '';
     h += sec('Schémas', 'star', `<div class="presets">${PRESETS.map(p => `<button class="preset" data-preset="${p.key}"><b>${p.label}</b><span>${p.desc}</span></button>`).join('')}</div>
       <div class="ctl"><label>Mes schémas</label>${myPresets.length ? `<div class="mine">${myPresets.map(p => `<div class="mine-row"><button class="chip" data-mine="${p.id}">${esc(p.name)}</button><button class="mine-x" data-mine-del="${p.id}" aria-label="Supprimer">${icon('x')}</button></div>`).join('')}</div>` : '<div class="s" style="font-size:12px;color:var(--ink3)">Aucun pour l\'instant.</div>'}
-      <button class="btn sm" id="savepreset" style="margin-top:8px;width:100%">${icon('plus')}Enregistrer le schéma actuel</button></div>`);
+      <button class="btn sm" id="savepreset" style="margin-top:8px;width:100%">${icon('plus')}Enregistrer le schéma actuel</button>
+      <button class="btn sm primary" id="fromphoto" style="margin-top:6px;width:100%">${icon('frame')}Recréer depuis une photo…</button></div>`);
     h += sec('Fond', 'bg', `<div class="swatches">${BACKGROUNDS.map(b => `<button class="sw ${b.c === data.background.color ? 'on' : ''}" style="background:${b.c}" data-bg="${b.c}" title="${b.n}"></button>`).join('')}
         <label class="sw" style="background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red)" title="Couleur personnalisée"><input type="color" id="bgpick" value="${data.background.color}"></label></div>
       <div class="ctl"><label>Murs du studio</label>${chips('walls', ['dark', 'light'], data.studio.walls, v => v === 'dark' ? 'Sombres' : 'Clairs')}</div>
@@ -419,6 +495,7 @@ export function openEditor(root, store, setId, opts = {}) {
       await store.deletePreset(p.id); myPresets = myPresets.filter(x => x.id !== p.id); buildLibrary();
     });
     el.querySelector('#savepreset').onclick = savePreset;
+    el.querySelector('#fromphoto').onclick = photoDialog;
     el.querySelectorAll('[data-bg]').forEach(b => b.onclick = () => { data.background.color = b.dataset.bg; studio.applyBackground(); commit(); buildLibrary(); });
     el.querySelector('#bgpick').oninput = e => { data.background.color = e.target.value; studio.applyBackground(); };
     el.querySelector('#bgpick').onchange = () => { commit(); buildLibrary(); };
@@ -447,7 +524,7 @@ export function openEditor(root, store, setId, opts = {}) {
     el.querySelectorAll('[data-add]').forEach(b => b.onclick = () => addItem(b.dataset.add));
   }
 
-  function quickFrame(kind) {
+  function quickFrame(kind, silent) {
     const c = data.camera, u = studio.model.userData;
     const H = { face: .42, bust: .75, half: 1.15, full: 2.05 }[kind];
     const ty = { face: u.headY - .01, bust: u.headY - .2, half: u.headY - .45, full: u.height / 2 + .02 }[kind];
@@ -457,7 +534,7 @@ export function openEditor(root, store, setId, opts = {}) {
     c.tx = 0; c.tz = 0.05; c.ty = ty;
     c.x = dir.x * dist; c.z = dir.z * dist; c.y = kind === 'full' ? 1.1 : ty + .05;
     if (dist > 9) toast('Recule beaucoup : passe à une focale plus courte');
-    studio.applyCamera(); commit(); buildLibrary();
+    studio.applyCamera(); if (!silent) { commit(); buildLibrary(); }
   }
 
   /* ---------------- ajout d'éléments ---------------- */

@@ -24,7 +24,7 @@ function azLabel(d) {
 }
 
 /* ---------- schéma 2D vu de dessus ---------- */
-function drawDiagram(ctx, X, Y, W, H, data, studio) {
+export function drawDiagram(ctx, X, Y, W, H, data) {
   const dist = data.model.distance, cam = data.camera;
   const pts = [[-1.5, -dist], [1.5, -dist], [0, .6], [cam.x, cam.z]];
   for (const it of data.items) pts.push([it.x, it.z]);
@@ -138,6 +138,30 @@ function table(ctx, x, y, cols, rows, rowH = 44) {
   return y;
 }
 
+// données de la fiche (réutilisées par la vue téléphone)
+export function sheetInfo(studio, data) {
+  const cam = data.camera, meter = studio.meter();
+  const ev = meter ? 2 * Math.log2(meter / cam.f) : null;
+  const expo = ev === null ? 'Aucune lumière' : Math.abs(ev) < .34 ? 'Exposition juste' : `${ev > 0 ? 'Surexposé' : 'Sous-exposé'} de ${fr(Math.abs(ev))} IL`;
+  const rows = data.items.map((it, i) => {
+    const d = Math.hypot(it.x, it.z, (it.y || 1) - 1.58), m = studio.meter(it.id);
+    return { n: i + 1, type: it.type, name: itemName(it), mod: itemModifier(it),
+      power: it.type === 'light' ? `${it.power} ${it.kind === 'flash' ? 'Ws' : 'W'}` : '—', temp: it.type === 'light' ? `${it.kelvin} K` : '—',
+      height: it.finish?.startsWith('v') ? '2 m' : `${fr(it.y, 2)} m`, dist: `${fr(d)} m`, angle: azLabel(azimuth(it, cam)),
+      cell: it.type === 'light' ? (m ? fmtF(m) : 'hors faisceau') : (m ? `${fmtF(m)} (rebond)` : '—') };
+  });
+  return { expo, ev, rows, meter: meter ? fmtF(meter) : null, subject: fr(studio.subjectDistance()),
+    cam: [['Focale', `${cam.focal} mm`], ['Ouverture', fmtF(cam.f)], ['Vitesse', fmtSh(cam.shutter)], ['ISO', String(cam.iso)], ['Balance des blancs', `${cam.wb} K`], ['Format', cam.format], ['Hauteur', `${fr(cam.y, 2)} m`], ['Distance au sujet', `${fr(studio.subjectDistance())} m`]] };
+}
+// version sans moteur 3D (sets jamais sauvegardés depuis l'ordi)
+export function basicInfo(data) {
+  const cam = data.camera;
+  return { expo: null, meter: null, rows: data.items.map((it, i) => ({ n: i + 1, type: it.type, name: itemName(it), mod: itemModifier(it),
+    power: it.type === 'light' ? `${it.power} ${it.kind === 'flash' ? 'Ws' : 'W'}` : '—', temp: it.type === 'light' ? `${it.kelvin} K` : '—',
+    height: it.finish?.startsWith('v') ? '2 m' : `${fr(it.y, 2)} m`, dist: `${fr(Math.hypot(it.x, it.z, (it.y || 1) - 1.58))} m`, angle: azLabel(azimuth(it, cam)), cell: '—' })),
+    cam: [['Focale', `${cam.focal} mm`], ['Ouverture', fmtF(cam.f)], ['Vitesse', fmtSh(cam.shutter)], ['ISO', String(cam.iso)], ['Balance des blancs', `${cam.wb} K`], ['Format', cam.format], ['Hauteur', `${fr(cam.y, 2)} m`]] };
+}
+
 export async function buildSheet({ studio, data, name }) {
   await document.fonts?.ready;
   const cam = data.camera, renderUrl = studio.capture(1400, 'image/jpeg', .92), img = await loadImg(renderUrl);
@@ -178,7 +202,7 @@ export async function buildSheet({ studio, data, name }) {
   // colonne droite
   const RX = M + colL + gap;
   ctx.fillStyle = INK3; ctx.font = '500 18px Inter, sans-serif'; ctx.fillText('SCHÉMA (VUE DE DESSUS)', RX, top - 18);
-  drawDiagram(ctx, RX, top, colR, diagH, data, studio);
+  drawDiagram(ctx, RX, top, colR, diagH, data);
 
   let y = top + diagH + 70;
   ctx.fillStyle = INK3; ctx.font = '500 18px Inter, sans-serif'; ctx.fillText('APPAREIL PHOTO', RX, y);
@@ -197,15 +221,7 @@ export async function buildSheet({ studio, data, name }) {
   y += 44 * 4 + 90;
   ctx.fillStyle = INK3; ctx.font = '500 18px Inter, sans-serif'; ctx.fillText('LUMIÈRES & ACCESSOIRES', RX, y);
   const cols = [{ t: '#', w: 50 }, { t: 'Élément', w: 220 }, { t: 'Modeleur', w: 250 }, { t: 'Puissance', w: 130 }, { t: 'Temp.', w: 100 }, { t: 'Haut.', w: 95 }, { t: 'Dist.', w: 95 }, { t: 'Angle', w: 150 }, { t: 'Cellule', w: colR - 1090 }];
-  const rows = items.map((it, i) => {
-    const d = Math.hypot(it.x, it.z, (it.y || 1) - 1.58);
-    const m = studio.meter(it.id);
-    return [i + 1, itemName(it), itemModifier(it),
-      it.type === 'light' ? `${it.power} ${it.kind === 'flash' ? 'Ws' : 'W'}` : '—',
-      it.type === 'light' ? `${it.kelvin} K` : '—',
-      it.finish?.startsWith('v') ? '2 m' : `${fr(it.y, 2)} m`, `${fr(d)} m`, azLabel(azimuth(it, cam)),
-      it.type === 'light' ? (m ? fmtF(m) : 'hors faisceau') : (m ? `${fmtF(m)} (rebond)` : '—')];
-  });
+  const rows = sheetInfo(studio, data).rows.map(r => [r.n, r.name, r.mod, r.power, r.temp, r.height, r.dist, r.angle, r.cell]);
   if (!rows.length) rows.push(['', 'Aucun élément', '', '', '', '', '', '', '']);
   table(ctx, RX, y + 44, cols, rows, rowH);
 

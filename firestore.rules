@@ -1,9 +1,16 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Chaque utilisateur ne voit et ne modifie que ses propres dossiers et sets
+    // Chaque utilisateur ne voit et ne modifie que ses propres dossiers, sets et presets
     match /users/{uid}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    // Sets partagés en lecture seule : lisibles par toute personne ayant le lien,
+    // modifiables uniquement par leur propriétaire
+    match /shared/{shareId} {
+      allow read: if true;
+      allow create: if request.auth != null && request.resource.data.owner == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.owner == request.auth.uid;
     }
   }
 }

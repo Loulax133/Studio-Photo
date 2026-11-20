@@ -238,3 +238,44 @@ button.brand{font:inherit;font-weight:600;font-size:16px}
   .insp{border-radius:16px 16px 12px 12px}
   .render-head .btn.icon{width:30px}
 }
+
+/* ---------- vue fiche (téléphone) ---------- */
+.fiche{min-height:100vh;background:#fff}
+.fiche-top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top));background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.fiche-title{flex:1;min-width:0;display:flex;flex-direction:column}
+.fiche-title b{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fiche-title span{font-size:12px;color:var(--ink3)}
+.fiche-body{padding:14px 14px 40px;max-width:720px;margin:0 auto}
+.fiche-render{display:block;width:100%;border-radius:14px;background:var(--bg2)}
+.fiche-empty{aspect-ratio:4/5;border-radius:14px;border:1.5px dashed var(--line2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--ink2);text-align:center;padding:24px}
+.fiche-empty p{margin:0;font-size:13.5px}
+.fiche-note{font-size:12px;color:var(--ink3);margin:8px 2px 0}
+.fiche-expo{display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--bg2);font-size:13px;--c:var(--ink)}
+.fiche-expo.ok{--c:#1f9d55}.fiche-expo.warn{--c:#d98a00}.fiche-expo.bad{--c:#d32f2f}
+.fiche-expo b{color:var(--c);font-weight:600}.fiche-expo span{color:var(--ink2)}
+.fiche-sec{margin-top:26px}
+.fiche-sec h2{font-size:12px;font-weight:600;color:var(--ink3);margin:0 0 10px;letter-spacing:.01em}
+.fiche-diag{display:block;width:100%;padding:0;border-radius:14px;overflow:hidden}
+.fiche-diag canvas{display:block}
+.fiche-dl{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin:0}
+.fiche-dl div{display:flex;flex-direction:column}
+.fiche-dl dt{font-size:12px;color:var(--ink3)}.fiche-dl dd{margin:0;font-weight:600;font-size:15px}
+.fiche-item{display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.fiche-item .num{flex:none;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--ink);display:grid;place-items:center;font-size:12px;font-weight:600}
+.fiche-item .num.l{background:var(--ink);color:#fff}
+.fiche-item b{font-size:14.5px}.fiche-item .mod{display:block;font-size:12.5px;color:var(--ink2);margin-top:1px}
+.chips-ro{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.chips-ro i{font-style:normal;font-size:12px;padding:3px 8px;border-radius:6px;background:var(--bg2);color:var(--ink2)}
+.chips-ro i.cell{background:#eef3ff;color:var(--sel);font-weight:600}
+.fiche-p{font-size:13.5px;color:var(--ink2);margin:0;line-height:1.55}
+.fiche-full{position:fixed;inset:0;z-index:80;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px}
+.fiche-full .btn{position:absolute;top:max(10px,env(safe-area-inset-top));right:10px}
+
+/* ---------- analyse de photo ---------- */
+.photo-modal{max-width:520px;max-height:90vh;overflow-y:auto}
+.photo-modal label.btn{cursor:pointer}
+.ph-prev{margin-top:14px}.ph-prev canvas{display:block;max-width:100%;border-radius:10px}
+.ph-lines{margin:12px 0 0;padding-left:18px;font-size:13.5px;line-height:1.6}
+.ph-note{font-size:12px;color:var(--ink3);margin:8px 0 0}
+.ph-wait{font-size:13px;color:var(--ink2);margin-top:14px}
+.ph-err{font-size:13px;color:#c62828;margin-top:14px}

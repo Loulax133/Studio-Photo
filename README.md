@@ -35,3 +35,8 @@ Ouvre l'URL dans Safari → Partager → **Sur l'écran d'accueil**. Si la conne
 - Gélatines (CTO, CTB, couleurs), gobos (fenêtre, stores, feuillage, points), lumière de fenêtre, fumée/brume avec faisceaux.
 - Profondeur de champ simulée (mise au point sur le point bleu), grille des tiers, comparaison avant / après.
 - Lien de partage en lecture seule (nécessite les nouvelles règles Firestore).
+
+## Nouveautés V1.5
+- Téléphone : vue fiche par défaut (rendu calculé sur l'ordi à chaque sauvegarde, schéma, réglages), bouton 3D pour ajuster ponctuellement.
+- « Recréer depuis une photo » (section Schémas) : analyse du portrait dans le navigateur (MediaPipe Face Landmarker, fichiers dans `vendor/mediapipe`, ~18 Mo chargés seulement à la première analyse).
+- Fichier de set `.lightset` : export depuis l'éditeur (Exporter → Fichier du set), import depuis l'accueil (+ Nouveau → Importer un fichier de set).

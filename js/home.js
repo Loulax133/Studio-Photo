@@ -1,5 +1,5 @@
 import { icon, esc, modal, popMenu, toast, timeAgo } from './ui.js';
-import { defaultScene } from './editor/defaults.js';
+import { defaultScene, parseSetFile } from './editor/defaults.js';
 
 const skeleton = n => `<div class="grid">${Array.from({ length: n }, () => '<div class="card sk"><div class="frame"></div><div class="meta"><div class="sk-line"></div></div></div>').join('')}</div>`;
 
@@ -62,7 +62,8 @@ export function renderHome(root, store, folderId) {
       ${sets.length ? `<h2 class="section-label" style="margin-top:44px">Récents</h2><div class="grid">${sets.slice(0, 8).map(setCard).join('')}</div>` : ''}`;
     main.querySelector('#new').onclick = e => popMenu(e.currentTarget, [
       { icon: 'frame', label: 'Set', run: () => newSet(null) },
-      { icon: 'folder', label: 'Dossier', run: newFolder }]);
+      { icon: 'folder', label: 'Dossier', run: newFolder },
+      { icon: 'download', label: 'Importer un fichier de set', run: () => importSet(null) }]);
     main.querySelectorAll('[data-folder]').forEach(b => b.onclick = () => location.hash = 'folder-' + b.dataset.folder);
     main.querySelectorAll('[data-more-folder]').forEach(b => b.onclick = () => {
       const f = folders.find(x => x.id === b.dataset.moreFolder);
@@ -79,13 +80,16 @@ export function renderHome(root, store, folderId) {
     const fs = sets.filter(s => s.folderId === folderId);
     main.innerHTML = `
       <div class="crumbs"><button id="up">Projets</button>${icon('chev')}<span>${esc(f.name)}</span></div>
-      <div class="home-head"><h1>${esc(f.name)}</h1><button class="btn primary" id="ns2">${icon('plus')}Nouveau set</button></div>
+      <div class="home-head"><h1>${esc(f.name)}</h1><button class="btn primary" id="ns2">${icon('plus')}Nouveau</button></div>
       <div class="grid">
         <div class="card new"><button class="frame" id="ns">${icon('plus')}<span>Nouveau set</span></button></div>
         ${fs.map(setCard).join('')}
       </div>`;
     main.querySelector('#up').onclick = () => location.hash = '';
-    main.querySelector('#ns').onclick = main.querySelector('#ns2').onclick = () => newSet(folderId);
+    main.querySelector('#ns').onclick = () => newSet(folderId);
+    main.querySelector('#ns2').onclick = e => popMenu(e.currentTarget, [
+      { icon: 'frame', label: 'Nouveau set', run: () => newSet(folderId) },
+      { icon: 'download', label: 'Importer un fichier de set', run: () => importSet(folderId) }]);
   }
 
   function bindCards() {
@@ -141,6 +145,22 @@ export function renderHome(root, store, folderId) {
     let fid = r.folderId;
     if (r.newFolder) fid = (await store.createFolder(r.newFolder)).id;
     await store.updateSet(s.id, { folderId: fid }); toast('Set déplacé'); reload();
+  }
+  // fichier .lightset (exporté depuis l'app ou préparé par Claude) → set prêt en 3D
+  function importSet(defFolder) {
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.lightset,.json,application/json';
+    inp.onchange = async () => {
+      const f = inp.files?.[0]; if (!f) return;
+      let parsed;
+      try { parsed = parseSetFile(await f.text()); } catch { toast('Fichier non reconnu (il faut un fichier .lightset)', 3500); return; }
+      const r = await setDialog({ title: 'Importer « ' + parsed.name + ' »', name: parsed.name, folder: defFolder || folders[0]?.id, ok: 'Importer' });
+      if (!r) return;
+      let fid = r.folderId;
+      if (r.newFolder) fid = (await store.createFolder(r.newFolder)).id;
+      const s = await store.createSet(fid, r.name, parsed.scene);
+      toast('Set importé'); location.hash = 'set-' + s.id;
+    };
+    inp.click();
   }
   async function newFolder() {
     const n = await modal({ title: 'Nouveau dossier', input: '', ok: 'Créer' });

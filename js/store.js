@@ -37,6 +37,8 @@ class LocalBackend {
   async createPreset(p) { const db = this._db(); db.presets ||= {}; const r = { id: uid(), ...p, createdAt: Date.now() }; db.presets[r.id] = r; this._save(db); return r; }
   async deletePreset(id) { const db = this._db(); delete db.presets?.[id]; this._save(db); }
   get canShare() { return false; }
+  async saveRender(id, r) { const db = this._db(); db.renders ||= {}; db.renders[id] = r; this._save(db); }
+  async getRender(id) { return this._db().renders?.[id] || null; }
 }
 
 /* ------------------------------------------------------------------ */
@@ -110,13 +112,21 @@ class FirebaseBackend {
   async listPresets() { return (await this._list('presets')).map(p => ({ ...p, items: typeof p.items === 'string' ? JSON.parse(p.items) : p.items })).sort((a, b) => a.createdAt - b.createdAt); }
   async createPreset(p) { const id = uid(); const r = { ...p, items: JSON.stringify(p.items), createdAt: Date.now(), updatedAt: Date.now() }; await this.F.setDoc(this._doc('presets', id), r); return { id, ...p }; }
   async deletePreset(id) { await this.F.deleteDoc(this._doc('presets', id)); }
+  // rendu calculé sur l'ordi, pour la vue fiche du téléphone (document séparé pour garder l'accueil léger)
+  async saveRender(id, r) { await this.F.setDoc(this._doc('renders', id), { ...r, info: JSON.stringify(r.info || null), updatedAt: Date.now() }); }
+  async getRender(id) {
+    const ref = this._doc('renders', id); let d = null;
+    try { d = await this.F.getDocFromCache(ref); } catch {}
+    if (!d?.exists()) d = await this.F.getDoc(ref);
+    if (!d.exists()) return null; const v = d.data(); return { ...v, info: v.info ? JSON.parse(v.info) : null };
+  }
   // partage en lecture seule : copie publique du set dans /shared/{id}
   get canShare() { return true; }
-  async publishShare(shareId, set, scene, thumb) {
+  async publishShare(shareId, set, scene, thumb, render) {
     const id = shareId || uid() + uid();
-    await this.F.setDoc(this.F.doc(this.db, 'shared', id), {
-      owner: this.user.uid, ownerName: this.user.name || '', name: set.name, scene: JSON.stringify(scene), thumb: thumb || '', updatedAt: Date.now(),
-    });
+    const doc = { owner: this.user.uid, ownerName: this.user.name || '', name: set.name, scene: JSON.stringify(scene), thumb: thumb || '', updatedAt: Date.now() };
+    if (render) { doc.render = render.img || ''; doc.info = JSON.stringify(render.info || null); }
+    await this.F.setDoc(this.F.doc(this.db, 'shared', id), doc, { merge: true });
     return id;
   }
   async unshare(shareId) { await this.F.deleteDoc(this.F.doc(this.db, 'shared', shareId)); }
