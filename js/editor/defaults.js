@@ -68,13 +68,13 @@ export const WBS = [3200, 4300, 5600, 6500];
 
 export function defaultScene() {
   return {
-    v: 1,
+    v: 2,
     background: { color: '#f4f4f2' },
     studio: { walls: 'dark' },
     model: { gender: 'f', skin: 'light', distance: 1.8, rot: 0 },
-    camera: { x: 0, y: 1.5, z: 3.4, tx: 0, ty: 1.42, tz: 0, focal: 85, format: '4:5', iso: 100, f: 11, shutter: 1 / 125, wb: 5600 },
+    camera: { x: 0, y: 1.6, z: 3.4, tx: 0, ty: 1.52, tz: 0, focal: 85, format: '4:5', iso: 100, f: 11, shutter: 1 / 125, wb: 5600 },
     items: [
-      { id: 'key', type: 'light', kind: 'flash', mod: 'octa', power: 200, kelvin: 5600, x: -1.35, y: 2.3, z: 0.95, aim: 'face' },
+      { id: 'key', type: 'light', kind: 'flash', mod: 'octa', power: 200, kelvin: 5600, x: -1.35, y: 2.4, z: 0.95, aim: 'face' },
       { id: 'refl', type: 'refl', finish: 'white', x: 0.9, y: 1.0, z: 0.75, aim: 'face' },
     ],
   };
@@ -136,11 +136,25 @@ export const PRESETS = [
 // { "format": "lightstudio-set", "version": 1, "name": "…", "scene": { background, studio, model, camera, items } }
 export const SET_FORMAT = 'lightstudio-set';
 const num = (v, d, lo = -Infinity, hi = Infinity) => { v = +v; return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
+// V1.8 : tous les personnages ont la tête à la même hauteur (yeux à 1,60 m). Les sets enregistrés avant
+// sont décalés (caméra + lumières) de l'écart avec l'ancienne hauteur de tête du personnage choisi.
+const OLD_HEAD = { real: { f: { light: 1.484, medium: 1.381, dark: 1.549 }, m: { light: 1.625, medium: 1.506, dark: 1.691 } }, mannequin: { f: 1.585, m: 1.696 } };
+export function migrateScene(d) {
+  if (!d || typeof d !== 'object' || d.v >= 2) return d;
+  const m = d.model || {}, g = m.gender === 'm' ? 'm' : 'f';
+  const old = m.style === 'real' ? (OLD_HEAD.real[g][m.skin] ?? 1.484) : OLD_HEAD.mannequin[g];
+  const dy = 1.585 - old;
+  if (Math.abs(dy) > 0.005) {
+    if (d.camera) { d.camera.y = +(+d.camera.y + dy).toFixed(3); d.camera.ty = +(+d.camera.ty + dy).toFixed(3); }
+    for (const it of Array.isArray(d.items) ? d.items : []) if (typeof it.y === 'number') it.y = +(it.y + dy).toFixed(2);
+  }
+  d.v = 2; return d;
+}
 export function normalizeScene(src) {
-  const def = defaultScene(), s = src && typeof src === 'object' ? src : {};
+  const def = defaultScene(), s = migrateScene(src && typeof src === 'object' ? src : {});
   const hexOk = c => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
   const out = {
-    v: 1,
+    v: 2,
     background: { color: hexOk(s.background?.color) ? s.background.color : def.background.color },
     studio: { walls: s.studio?.walls === 'light' ? 'light' : 'dark', haze: num(s.studio?.haze, 0, 0, 1) },
     model: {

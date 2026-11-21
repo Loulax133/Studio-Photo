@@ -2,6 +2,7 @@
 //  - Firebase (Auth persistante + Firestore) si firebase-config.js est rempli
 //  - Local (localStorage) sinon
 import { firebaseConfig } from './firebase-config.js';
+import { migrateScene } from './editor/defaults.js';
 
 const FB = 'https://www.gstatic.com/firebasejs/13.3.0/';
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -134,7 +135,7 @@ class FirebaseBackend {
 }
 
 // Firestore stocke la scène en texte : on la relit en objet
-export function parseScene(s) { if (!s) return null; return typeof s === 'string' ? JSON.parse(s) : s; }
+export function parseScene(s) { if (!s) return null; return migrateScene(typeof s === 'string' ? JSON.parse(s) : s); }
 
 export async function createStore() {
   if (firebaseConfig && firebaseConfig.apiKey) {
