@@ -464,11 +464,11 @@ export function openEditor(root, store, setId, opts = {}) {
         <label class="sw" style="background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red)" title="Couleur personnalisée"><input type="color" id="bgpick" value="${data.background.color}"></label></div>
       <div class="ctl"><label>Murs du studio</label>${chips('walls', ['dark', 'light'], data.studio.walls, v => v === 'dark' ? 'Sombres' : 'Clairs')}</div>
       <div class="ctl"><label>Fumée / brume <b id="vhaze">${Math.round((data.studio.haze || 0) * 100)} %</b></label><input type="range" min="0" max="1" step="0.01" value="${data.studio.haze || 0}" data-range="haze"></div>`);
-    h += sec('Mannequin', 'person', `<div class="ctl" style="margin-top:0"><label>Rendu du personnage</label>${chips('style', ['real', 'mannequin'], m.style === 'real' ? 'real' : 'mannequin', v => v === 'real' ? 'Réaliste (buste)' : 'Mannequin (en pied)')}
-        ${m.style === 'real' ? '<div class="s" style="font-size:11.5px;color:var(--ink3);margin-top:6px">Buste HD pour les portraits serrés. Pour un plan large, repasse en mannequin.</div>' : ''}</div>
+    h += sec('Mannequin', 'person', `<div class="ctl" style="margin-top:0"><label>Rendu du personnage</label>${chips('style', ['real', 'mannequin'], m.style === 'real' ? 'real' : 'mannequin', v => v === 'real' ? 'Buste HD' : 'En pied')}
+        <div class="s" style="font-size:11.5px;color:var(--ink3);margin-top:6px">${m.style === 'real' ? 'Buste seul, plus léger : idéal pour les portraits serrés.' : 'Même buste avec le corps entier, pour les plans larges.'}</div></div>
       <div class="ctl"><label>Modèle</label>${chips('gender', ['f', 'm'], m.gender, v => v === 'f' ? 'Femme' : 'Homme')}</div>
       <div class="ctl"><label>Carnation</label>${chips('skin', Object.keys(SKINS), m.skin, v => SKINS[v].label)}</div>
-      ${m.style === 'real' && m.gender === 'f' && m.skin !== 'dark' ? `<div class="ctl"><label>Cheveux</label>${chips('hair', ['bob', 'pony'], m.hair === 'pony' ? 'pony' : 'bob', v => v === 'pony' ? 'Attachés' : 'Détachés')}</div>` : ''}
+      ${m.gender === 'f' && m.skin !== 'dark' ? `<div class="ctl"><label>Cheveux</label>${chips('hair', ['bob', 'pony'], m.hair === 'pony' ? 'pony' : 'bob', v => v === 'pony' ? 'Attachés' : 'Détachés')}</div>` : ''}
       <div class="ctl"><label>Distance au fond <b id="vdist">${fr(m.distance)} m</b></label><input type="range" min="0.5" max="5" step="0.1" value="${m.distance}" data-range="distance"></div>
       <div class="ctl"><label>Orientation <b id="vrot">${m.rot || 0}°</b></label><input type="range" min="-180" max="180" step="5" value="${m.rot || 0}" data-range="rot"></div>`);
     for (const g of LIBRARY) {

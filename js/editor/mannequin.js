@@ -246,21 +246,23 @@ if (nn < ${(0.42 + level * 0.1).toFixed(2)}) discard;`);
 }
 const IRIS = { light: '#5b4a35', medium: '#2b1d14', dark: '#21150f' };
 
-export function buildRealistic({ gender = 'f', skin = 'light', hair }, onReady) {
+export function buildRealistic({ gender = 'f', skin = 'light', hair }, onReady, full = false) {
   const g = new THREE.Group(); g.name = 'mannequin';
   const name = `hd_${gender}_${skin}`;
   // valeurs provisoires le temps du chargement
   g.userData = { headY: 1.585, chestY: 1.33, height: 1.71, loading: true };  // tous les bustes sont ramenés à la même hauteur d'yeux (1,60 m)
   Promise.all([loadGLB(name), loadMeta(name)]).then(([gltf, meta]) => {
     const hs = (meta.hairs || []).includes(hair) ? hair : meta.hair;
-    return (meta.hairs ? loadGLB(`hair_${hs}_${gender}_${skin}`) : Promise.resolve(null)).then(hg => [gltf, meta, hg, hs]);
-  }).then(([gltf, meta, hg, hs]) => {
+    return Promise.all([meta.hairs ? loadGLB(`hair_${hs}_${gender}_${skin}`) : null, full ? loadGLB(name + '_body') : null]).then(([hg, bg]) => [gltf, meta, hg, hs, bg]);
+  }).then(([gltf, meta, hg, hs, bg]) => {
     const skinMat = skinMaterial();
-    const meshes = []; gltf.scene.traverse(o => o.isMesh && meshes.push(o)); hg?.scene.traverse(o => o.isMesh && meshes.push(o));
+    const meshes = []; gltf.scene.traverse(o => o.isMesh && meshes.push(o)); hg?.scene.traverse(o => o.isMesh && meshes.push(o)); bg?.scene.traverse(o => o.isMesh && meshes.push(o));
     meshes.forEach(o => {
       if (!o.isMesh) return;
       const mesh = o.clone(); mesh.geometry = o.geometry; if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
-      if (o.name.startsWith('skin')) mesh.material = skinMat;
+      if (o.name.startsWith('skin') || o.name.startsWith('bodyskin')) mesh.material = skinMat;
+      else if (o.name.startsWith('outfit')) mesh.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9 });
+      else if (o.name.startsWith('shoes')) mesh.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .55 });
       else if (o.name.startsWith('lashes')) mesh.material = new THREE.MeshStandardMaterial({ color: '#1a1410', roughness: .8, side: THREE.DoubleSide });
       else if (o.name.startsWith('hairclumps')) mesh.material = clumpMaterial(skin, hs);
       else if (o.name.startsWith('hairfuzz')) { mesh.material = fuzzMaterial(skin, +o.name.slice(8) || 0); mesh.castShadow = false; }

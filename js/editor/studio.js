@@ -276,13 +276,8 @@ export class Studio {
     const m = this.data.model, style = m.style === 'real' ? 'real' : 'mannequin', key = style + m.gender + m.skin + (m.hair || '');
     if (this.modelKey !== key) {
       if (this.model) { this.scene.remove(this.model); if (this.model.userData.procedural) this.model.traverse(o => o.geometry?.dispose()); }
-      if (style === 'real') {
-        // chargement asynchrone : on réaligne les lumières une fois le modèle prêt
-        this.model = buildRealistic(m, () => { if (this.modelKey === key) { this.syncItems(); this.onModelReady?.(); } });
-      } else {
-        this.model = buildMannequin(m); this.model.userData.procedural = true;
-        this.model.traverse(o => { if (o.isMesh) o.userData.pick = { kind: 'model' }; });
-      }
+      // buste HD seul, ou en pied : le même buste + un corps moins détaillé (chargement asynchrone, on réaligne ensuite)
+      this.model = buildRealistic(m, () => { if (this.modelKey === key) { this.syncItems(); this.onModelReady?.(); } }, style !== 'real');
       this.modelKey = key;
       this.scene.add(this.model);
     }
