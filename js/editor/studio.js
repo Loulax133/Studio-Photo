@@ -273,7 +273,7 @@ export class Studio {
     this.recompute();
   }
   applyModel() {
-    const m = this.data.model, style = m.style === 'real' ? 'real' : 'mannequin', key = style + m.gender + m.skin;
+    const m = this.data.model, style = m.style === 'real' ? 'real' : 'mannequin', key = style + m.gender + m.skin + (m.hair || '');
     if (this.modelKey !== key) {
       if (this.model) { this.scene.remove(this.model); if (this.model.userData.procedural) this.model.traverse(o => o.geometry?.dispose()); }
       if (style === 'real') {

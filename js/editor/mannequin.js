@@ -190,28 +190,60 @@ function eyeball(r, irisColor) {
   const g = new THREE.Group(); g.add(m); return g;
 }
 const HAIR = { light: '#3a291e', medium: '#17110e', dark: '#110d0b' };
+// mèches sculptées : reflet anisotrope en bande, perpendiculaire aux mèches (TANGENT = sens de la mèche)
+function clumpMaterial(skin, style) {
+  const twists = style === 'twists';
+  return new THREE.MeshPhysicalMaterial({
+    vertexColors: true, color: HAIR[skin], roughness: twists ? .6 : .45, anisotropy: twists ? .3 : .6, anisotropyRotation: Math.PI / 2,
+    sheen: .4, sheenColor: new THREE.Color(skin === 'light' ? '#8a6a52' : '#4a3a30'), sheenRoughness: .35,
+  });
+}
+// couches de « fourrure » de l'afro : bruit procédural, on jette les fragments entre les boucles
+function fuzzMaterial(skin, level) {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, color: HAIR[skin], roughness: .9, side: THREE.DoubleSide });
+  m.onBeforeCompile = sh => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vLp;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvLp = position;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+varying vec3 vLp;
+float h3(vec3 p){ p = fract(p * .3183099 + .1); p *= 17.; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float n3(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3. - 2. * f);
+  return mix(mix(mix(h3(i), h3(i + vec3(1,0,0)), f.x), mix(h3(i + vec3(0,1,0)), h3(i + vec3(1,1,0)), f.x), f.y),
+             mix(mix(h3(i + vec3(0,0,1)), h3(i + vec3(1,0,1)), f.x), mix(h3(i + vec3(0,1,1)), h3(i + vec3(1,1,1)), f.x), f.y), f.z); }`)
+      .replace('#include <alphatest_fragment>', `float nn = n3(vLp * 520.) * .6 + n3(vLp * 1400.) * .4;
+if (nn < ${(0.42 + level * 0.1).toFixed(2)}) discard;`);
+  };
+  return m;
+}
 const IRIS = { light: '#5b4a35', medium: '#2b1d14', dark: '#21150f' };
 
-export function buildRealistic({ gender = 'f', skin = 'light' }, onReady) {
+export function buildRealistic({ gender = 'f', skin = 'light', hair }, onReady) {
   const g = new THREE.Group(); g.name = 'mannequin';
   const name = `hd_${gender}_${skin}`;
   // valeurs provisoires le temps du chargement
   g.userData = { headY: gender === 'm' ? 1.62 : 1.485, chestY: gender === 'm' ? 1.38 : 1.25, height: gender === 'm' ? 1.75 : 1.61, loading: true };
   Promise.all([loadGLB(name), loadMeta(name)]).then(([gltf, meta]) => {
+    const hs = (meta.hairs || []).includes(hair) ? hair : meta.hair;
+    return (meta.hairs ? loadGLB(`hair_${hs}_${gender}_${skin}`) : Promise.resolve(null)).then(hg => [gltf, meta, hg, hs]);
+  }).then(([gltf, meta, hg, hs]) => {
     const skinMat = skinMaterial();
-    gltf.scene.traverse(o => {
+    const meshes = []; gltf.scene.traverse(o => o.isMesh && meshes.push(o)); hg?.scene.traverse(o => o.isMesh && meshes.push(o));
+    meshes.forEach(o => {
       if (!o.isMesh) return;
-      const mesh = o.clone(); mesh.geometry = o.geometry; mesh.geometry.computeVertexNormals();
+      const mesh = o.clone(); mesh.geometry = o.geometry; if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
       if (o.name.startsWith('skin')) mesh.material = skinMat;
       else if (o.name.startsWith('lashes')) mesh.material = new THREE.MeshStandardMaterial({ color: '#1a1410', roughness: .8, side: THREE.DoubleSide });
+      else if (o.name.startsWith('hairclumps')) mesh.material = clumpMaterial(skin, hs);
+      else if (o.name.startsWith('hairfuzz')) { mesh.material = fuzzMaterial(skin, +o.name.slice(8) || 0); mesh.castShadow = false; }
+      else if (o.name.startsWith('hair') && meshes.some(x => x.name.startsWith('hairclumps')))  // sous-couche mate, dans l'ombre des mèches
+        mesh.material = new THREE.MeshStandardMaterial({ vertexColors: true, color: HAIR[skin], roughness: .8 });
       else if (o.name.startsWith('hair')) {
-        const afro = String(meta.hair || '').startsWith('afro');
+        const afro = String(hs || '').startsWith('afro');
         mesh.material = afro
           ? new THREE.MeshPhysicalMaterial({ vertexColors: !!o.geometry.attributes.color, color: HAIR[skin], roughness: .88, sheen: .35, sheenColor: new THREE.Color('#3a2a22'), sheenRoughness: .6, side: THREE.DoubleSide })
           : new THREE.MeshPhysicalMaterial({ vertexColors: !!o.geometry.attributes.color, color: HAIR[skin], roughness: .45, clearcoat: .3, clearcoatRoughness: .3, sheen: .5, sheenColor: new THREE.Color('#7a5a45'), sheenRoughness: .3, side: THREE.DoubleSide });
       }
       else if (o.name.startsWith('top')) mesh.material = new THREE.MeshStandardMaterial({ color: '#3a3a3a', roughness: .9 });
-      mesh.castShadow = mesh.receiveShadow = true;
+      if (!o.name.startsWith('hairfuzz')) mesh.castShadow = true; mesh.receiveShadow = true;
       mesh.userData.pick = { kind: 'model' };
       g.add(mesh);
     });

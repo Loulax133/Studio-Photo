@@ -468,6 +468,7 @@ export function openEditor(root, store, setId, opts = {}) {
         ${m.style === 'real' ? '<div class="s" style="font-size:11.5px;color:var(--ink3);margin-top:6px">Buste HD pour les portraits serrés. Pour un plan large, repasse en mannequin.</div>' : ''}</div>
       <div class="ctl"><label>Modèle</label>${chips('gender', ['f', 'm'], m.gender, v => v === 'f' ? 'Femme' : 'Homme')}</div>
       <div class="ctl"><label>Carnation</label>${chips('skin', Object.keys(SKINS), m.skin, v => SKINS[v].label)}</div>
+      ${m.style === 'real' && m.gender === 'f' && m.skin !== 'dark' ? `<div class="ctl"><label>Cheveux</label>${chips('hair', ['bob', 'pony'], m.hair === 'pony' ? 'pony' : 'bob', v => v === 'pony' ? 'Attachés' : 'Détachés')}</div>` : ''}
       <div class="ctl"><label>Distance au fond <b id="vdist">${fr(m.distance)} m</b></label><input type="range" min="0.5" max="5" step="0.1" value="${m.distance}" data-range="distance"></div>
       <div class="ctl"><label>Orientation <b id="vrot">${m.rot || 0}°</b></label><input type="range" min="-180" max="180" step="5" value="${m.rot || 0}" data-range="rot"></div>`);
     for (const g of LIBRARY) {
@@ -507,7 +508,7 @@ export function openEditor(root, store, setId, opts = {}) {
       const b = e.target.closest('.chip'); if (!b) return;
       const k = box.dataset.chips, v = b.dataset.v;
       if (k === 'walls') { data.studio.walls = v; studio.applyBackground(); }
-      else if (k === 'gender' || k === 'skin' || k === 'style') { data.model[k] = v; studio.applyModel(); if (k === 'style' && v === 'real') { pendingFrame = 'bust'; quickFrame('bust', true); } }
+      else if (k === 'gender' || k === 'skin' || k === 'style' || k === 'hair') { data.model[k] = v; studio.applyModel(); if (k === 'style' && v === 'real') { pendingFrame = 'bust'; quickFrame('bust', true); } }
       else if (k === 'dof') { c.dof = v === 'on'; }
       else { c[k] = k === 'format' ? v : +v; studio.applyCamera(); if (k === 'format') layoutRender(); }
       commit(); buildLibrary();

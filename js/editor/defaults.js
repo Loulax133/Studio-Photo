@@ -58,7 +58,7 @@ export const BACKGROUNDS = [
   { c: '#3c3c3b', n: 'Anthracite' }, { c: '#111111', n: 'Noir' }, { c: '#d9c7b0', n: 'Sable' },
   { c: '#9fb3c8', n: 'Bleu ciel' }, { c: '#b84a3a', n: 'Rouge brique' },
 ];
-export const SKINS = { light: { label: 'Caucasienne', c: '#e7c4ab' }, medium: { label: 'Asiatique', c: '#d6ab88' }, dark: { label: 'Foncée', c: '#5e3c2b' } };
+export const SKINS = { light: { label: 'Caucasienne', c: '#e7c4ab' }, medium: { label: 'Asiatique', c: '#d6ab88' }, dark: { label: 'Dark skin', c: '#5e3c2b' } };
 export const FOCALS = [14, 20, 24, 28, 35, 40, 50, 70, 85, 90, 100, 105, 135, 200];
 export const FORMATS = { '2:3': [24, 36], '4:5': [24, 30], '1:1': [24, 24], '3:2': [36, 24], '16:9': [36, 20.25] };
 export const APERTURES = [1.4, 2, 2.8, 4, 5.6, 8, 11, 16, 22];
@@ -144,7 +144,7 @@ export function normalizeScene(src) {
     background: { color: hexOk(s.background?.color) ? s.background.color : def.background.color },
     studio: { walls: s.studio?.walls === 'light' ? 'light' : 'dark', haze: num(s.studio?.haze, 0, 0, 1) },
     model: {
-      gender: s.model?.gender === 'm' ? 'm' : 'f', skin: SKINS[s.model?.skin] ? s.model.skin : 'light', style: s.model?.style === 'real' ? 'real' : 'mannequin',
+      gender: s.model?.gender === 'm' ? 'm' : 'f', skin: SKINS[s.model?.skin] ? s.model.skin : 'light', style: s.model?.style === 'real' ? 'real' : 'mannequin', ...(typeof s.model?.hair === 'string' ? { hair: s.model.hair } : {}),
       distance: num(s.model?.distance, def.model.distance, .5, 5), rot: num(s.model?.rot, 0, -180, 180),
     },
     camera: { ...def.camera },
