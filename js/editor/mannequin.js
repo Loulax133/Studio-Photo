@@ -271,7 +271,7 @@ export function buildRealistic({ gender = 'f', skin = 'light', hair }, onReady, 
   const name = `hd_${gender}_${skin}`;
   // valeurs provisoires le temps du chargement
   g.userData = { headY: 1.585, chestY: 1.33, height: 1.71, loading: true };  // tous les bustes sont ramenés à la même hauteur d'yeux (1,60 m)
-  Promise.all([loadGLB(name), loadMeta(name)]).then(([gltf, meta]) => {
+  Promise.all([loadGLB(name + (full ? '_full' : '')), loadMeta(name)]).then(([gltf, meta]) => {
     const hs = hairFor(gender, skin, hair) || ((meta.hairs || []).includes(hair) ? hair : meta.hair);
     return Promise.all([meta.hairs ? loadGLB(`hair_${hs}_${gender}_${skin}`) : null, full ? loadGLB(name + '_body') : null]).then(([hg, bg]) => [gltf, meta, hg, hs, bg]);
   }).then(([gltf, meta, hg, hs, bg]) => {
