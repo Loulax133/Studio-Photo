@@ -148,8 +148,32 @@ export function openEditor(root, store, setId, opts = {}) {
     $('#histw').innerHTML = warn.join('');
     $('#rhist').classList.toggle('clip-hi', h.hi > 0.005);
   }
+  // position choisie à la main (glisser l'en-tête), mémorisée ; double-clic sur l'en-tête = placement auto
+  let inspPos = (() => { try { return JSON.parse(localStorage.getItem('ls.inspPos')); } catch { return null; } })();
+  function bindInspectorDrag() {
+    const el = $('#insp'); let drag = null;
+    el.addEventListener('pointerdown', e => {
+      if (isMobile || !e.target.closest('h4') || e.target.closest('button')) return;
+      const r = el.getBoundingClientRect(); drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, id: e.pointerId };
+      el.setPointerCapture(e.pointerId); el.classList.add('dragging'); e.preventDefault();
+    });
+    el.addEventListener('pointermove', e => {
+      if (!drag) return;
+      inspPos = { x: e.clientX - drag.dx, y: e.clientY - drag.dy };
+      placeInspector();
+    });
+    const end = () => { if (!drag) return; drag = null; el.classList.remove('dragging'); try { localStorage.setItem('ls.inspPos', JSON.stringify(inspPos)); } catch {} };
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+    el.addEventListener('dblclick', e => { if (!e.target.closest('h4') || e.target.closest('button')) return; inspPos = null; try { localStorage.removeItem('ls.inspPos'); } catch {} placeInspector(); });
+  }
   function placeInspector() {
     const el = $('#insp'); if (isMobile || el.classList.contains('hidden')) return;
+    if (inspPos) {
+      const w = el.offsetWidth, left = Math.max(4, Math.min(innerWidth - w - 4, inspPos.x)), top = Math.max(4, Math.min(innerHeight - 80, inspPos.y));
+      el.style.left = Math.round(left) + 'px'; el.style.top = Math.round(top) + 'px';
+      el.style.maxHeight = Math.max(160, innerHeight - top - 14) + 'px';
+      return;
+    }
     const r = renderBox.getBoundingClientRect(), w = el.offsetWidth;
     const libR = $('#lib')?.getBoundingClientRect().right || 0;
     let left = r.left - w - 12, top = r.top;
@@ -284,6 +308,7 @@ export function openEditor(root, store, setId, opts = {}) {
 
   /* ---------------- fenêtre de rendu ---------------- */
   function bindRender() {
+    bindInspectorDrag();
     const head = $('#rhead'); let drag = null;
     head.addEventListener('pointerdown', e => {
       if (e.target.closest('button')) return;
@@ -450,9 +475,15 @@ export function openEditor(root, store, setId, opts = {}) {
   }
 
   /* ---------------- bibliothèque (gauche) ---------------- */
-  const openSecs = new Set(['Schémas', 'Lumières']);
+  // sections ouvertes / fermées : mémorisées d'une session à l'autre
+  const SECS_KEY = 'ls.openSecs';
+  const openSecs = new Set((() => { try { const v = JSON.parse(localStorage.getItem(SECS_KEY)); if (Array.isArray(v)) return v; } catch {} return ['Schémas', 'Lumières']; })());
+  const saveSecs = () => { try { localStorage.setItem(SECS_KEY, JSON.stringify([...openSecs])); } catch {} };
+  let libScroll = null;
   function buildLibrary() {
     const el = $('#libscroll'); if (!el) return;
+    if (libScroll === null) { try { libScroll = +sessionStorage.getItem('ls.libScroll') || 0; } catch { libScroll = 0; } }
+    else libScroll = el.scrollTop;   // on garde la position de défilement quand le panneau se reconstruit
     const c = data.camera, m = data.model;
     const chips = (name, list, cur, fmt = x => x) => `<div class="chips" data-chips="${name}">${list.map(v => `<button class="chip ${String(v) === String(cur) ? 'on' : ''}" data-v="${v}">${fmt(v)}</button>`).join('')}</div>`;
     const sec = (title, ic, body) => `<div class="acc ${openSecs.has(title) ? 'open' : ''}" data-sec="${title}"><button>${icon(ic)}${title}${icon('chev', 'i chev')}</button><div class="body">${body}</div></div>`;
@@ -488,10 +519,13 @@ export function openEditor(root, store, setId, opts = {}) {
       <div class="ctl"><label>Cadrage rapide</label><div class="chips">
         <button class="chip" data-frame="face">Visage</button><button class="chip" data-frame="bust">Buste</button><button class="chip" data-frame="half">Mi-corps</button><button class="chip" data-frame="full">Pied</button></div></div>`);
     el.innerHTML = h;
+    el.scrollTop = libScroll;
+    if (!el.dataset.scrollBound) { el.dataset.scrollBound = 1; el.addEventListener('scroll', () => { try { sessionStorage.setItem('ls.libScroll', el.scrollTop); } catch {} }, { passive: true }); }
 
     el.querySelectorAll('.acc>button').forEach(b => b.onclick = () => {
       const a = b.parentElement, t = a.dataset.sec; a.classList.toggle('open');
       a.classList.contains('open') ? openSecs.add(t) : openSecs.delete(t);
+      saveSecs();
     });
     el.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => applyPreset(PRESETS.find(p => p.key === b.dataset.preset)));
     el.querySelectorAll('[data-mine]').forEach(b => b.onclick = () => applyPreset(myPresets.find(p => p.id === b.dataset.mine), true));
@@ -577,8 +611,7 @@ export function openEditor(root, store, setId, opts = {}) {
         const vflat = s.kind === 'item' && data.items.find(i => i.id === s.id)?.finish?.startsWith('v');
         gizmo.showY = viewMode !== 'top' && !vflat;
       }
-      if (s.kind === 'model') { openSecs.add('Mannequin'); buildLibrary(); $('#lib').classList.remove('collapsed'); }
-      if (s.kind === 'camera') { openSecs.add('Appareil photo'); buildLibrary(); }
+      if (isMobile && s.kind === 'model') { openSecs.add('Mannequin'); buildLibrary(); $('#lib').classList.remove('collapsed'); }
       if (isMobile && s.kind !== 'model') $('#lib').classList.add('collapsed');
     }
     $('#hint')?.classList.toggle('hidden', !!s);

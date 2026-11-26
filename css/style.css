@@ -228,6 +228,7 @@ button.brand{font:inherit;font-weight:600;font-size:16px}
 .mine-x{width:26px;height:30px;display:grid;place-items:center;color:var(--ink3)}
 .mine-x svg{width:14px;height:14px}.mine-x:hover{color:#c62828}
 .insp h4 .insp-x{margin-left:auto;width:30px;height:30px}
+@media (hover:hover) and (pointer:fine){.insp h4{cursor:grab;user-select:none;touch-action:none}.insp.dragging h4{cursor:grabbing}.insp.dragging{box-shadow:0 12px 40px rgba(0,0,0,.18)}}
 .row2{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:8px}
 .linkbtn{font-size:11px;color:var(--ink3);text-decoration:underline;margin-left:6px;margin-right:auto}
 .ctl label .linkbtn+b{margin-left:0}

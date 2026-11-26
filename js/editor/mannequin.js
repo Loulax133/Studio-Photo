@@ -252,7 +252,7 @@ export const HAIRS = {
   f_dark: [['cornrows', 'Tresses collées']],
   m_light: [['maxwell', 'Courts'], ['grump', 'Mèche']],
   m_medium: [['maxwell', 'Courts'], ['grump', 'Mèche']],
-  m_dark: [['twists', 'Twists']],
+  m_dark: [['afrocourt', 'Afro court'], ['afroras', 'Ras']],
 };
 export const hairFor = (gender, skin, hair) => { const l = HAIRS[gender + '_' + skin] || []; return (l.find(h => h[0] === hair) || l[0] || [])[0]; };
 // cartes de mèches (texture en niveaux de gris + alpha, teinte de l'app)
