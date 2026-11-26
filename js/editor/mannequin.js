@@ -244,6 +244,26 @@ if (nn < ${(0.42 + level * 0.1).toFixed(2)}) discard;`);
   };
   return m;
 }
+// coiffures du buste réaliste par modèle (la première = par défaut).
+// Coiffures « elvs_* » : pack Hair 02 de MakeHuman, par Elvaerwyn (CC-BY).
+export const HAIRS = {
+  f_light: [['witchy', 'Carré frange'], ['keylth', 'Longs']],
+  f_medium: [['sidedo', 'Carré'], ['babe80', 'Longs']],
+  f_dark: [['cornrows', 'Tresses collées']],
+  m_light: [['maxwell', 'Courts'], ['grump', 'Mèche']],
+  m_medium: [['maxwell', 'Courts'], ['grump', 'Mèche']],
+  m_dark: [['twists', 'Twists']],
+};
+export const hairFor = (gender, skin, hair) => { const l = HAIRS[gender + '_' + skin] || []; return (l.find(h => h[0] === hair) || l[0] || [])[0]; };
+// cartes de mèches (texture en niveaux de gris + alpha, teinte de l'app)
+function cardMaterial(src, skin) {
+  const cut = src.alphaTest || 0;
+  return new THREE.MeshPhysicalMaterial({
+    color: HAIR[skin], map: src.map, normalMap: src.normalMap || null, normalScale: new THREE.Vector2(1, 1),
+    roughness: .5, specularIntensity: .55, sheen: .45, sheenColor: new THREE.Color(skin === 'light' ? '#8a6a52' : '#4a3a30'), sheenRoughness: .35,
+    alphaTest: cut, alphaToCoverage: cut > 0, side: THREE.DoubleSide,
+  });
+}
 const IRIS = { light: '#5b4a35', medium: '#2b1d14', dark: '#21150f' };
 
 export function buildRealistic({ gender = 'f', skin = 'light', hair }, onReady, full = false) {
@@ -252,7 +272,7 @@ export function buildRealistic({ gender = 'f', skin = 'light', hair }, onReady, 
   // valeurs provisoires le temps du chargement
   g.userData = { headY: 1.585, chestY: 1.33, height: 1.71, loading: true };  // tous les bustes sont ramenés à la même hauteur d'yeux (1,60 m)
   Promise.all([loadGLB(name), loadMeta(name)]).then(([gltf, meta]) => {
-    const hs = (meta.hairs || []).includes(hair) ? hair : meta.hair;
+    const hs = hairFor(gender, skin, hair) || ((meta.hairs || []).includes(hair) ? hair : meta.hair);
     return Promise.all([meta.hairs ? loadGLB(`hair_${hs}_${gender}_${skin}`) : null, full ? loadGLB(name + '_body') : null]).then(([hg, bg]) => [gltf, meta, hg, hs, bg]);
   }).then(([gltf, meta, hg, hs, bg]) => {
     const skinMat = skinMaterial();
@@ -264,6 +284,7 @@ export function buildRealistic({ gender = 'f', skin = 'light', hair }, onReady, 
       else if (o.name.startsWith('outfit')) mesh.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9 });
       else if (o.name.startsWith('shoes')) mesh.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .55 });
       else if (o.name.startsWith('lashes')) mesh.material = new THREE.MeshStandardMaterial({ color: '#1a1410', roughness: .8, side: THREE.DoubleSide });
+      else if (o.name.startsWith('haircards')) mesh.material = cardMaterial(o.material, skin);
       else if (o.name.startsWith('hairclumps')) mesh.material = clumpMaterial(skin, hs);
       else if (o.name.startsWith('hairfuzz')) { mesh.material = fuzzMaterial(skin, +o.name.slice(8) || 0); mesh.castShadow = false; }
       else if (o.name.startsWith('hair') && o.geometry.attributes.uv && o.geometry.attributes.tangent) mesh.material = clumpMaterial(skin, hs);  // masse de base texturée

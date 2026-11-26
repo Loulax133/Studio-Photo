@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/OrbitControls.js';
 import { TransformControls } from 'three/addons/TransformControls.js';
 import { Studio } from './studio.js';
+import { HAIRS, hairFor } from './mannequin.js';
 import { LIBRARY, MODS, FLASH_MODS, BACKGROUNDS, SKINS, FOCALS, FORMATS, APERTURES, ISOS, SHUTTERS, WBS, GELS, GOBOS, GOBO_MODS, PRESETS, defaultScene, itemName, makeSetFile } from './defaults.js';
 import { buildSheet, sheetInfo } from './sheet.js';
 import { parseScene } from '../store.js';
@@ -468,7 +469,7 @@ export function openEditor(root, store, setId, opts = {}) {
         <div class="s" style="font-size:11.5px;color:var(--ink3);margin-top:6px">${m.style === 'real' ? 'Buste seul, plus léger : idéal pour les portraits serrés.' : 'Même buste avec le corps entier, pour les plans larges.'}</div></div>
       <div class="ctl"><label>Modèle</label>${chips('gender', ['f', 'm'], m.gender, v => v === 'f' ? 'Femme' : 'Homme')}</div>
       <div class="ctl"><label>Carnation</label>${chips('skin', Object.keys(SKINS), m.skin, v => SKINS[v].label)}</div>
-      ${m.gender === 'f' && m.skin !== 'dark' ? `<div class="ctl"><label>Cheveux</label>${chips('hair', ['bob', 'pony'], m.hair === 'pony' ? 'pony' : 'bob', v => v === 'pony' ? 'Attachés' : 'Détachés')}</div>` : ''}
+      ${(HAIRS[m.gender + '_' + m.skin] || []).length > 1 ? `<div class="ctl"><label>Cheveux</label>${chips('hair', HAIRS[m.gender + '_' + m.skin].map(h => h[0]), hairFor(m.gender, m.skin, m.hair), v => HAIRS[m.gender + '_' + m.skin].find(h => h[0] === v)[1])}</div>` : ''}
       <div class="ctl"><label>Distance au fond <b id="vdist">${fr(m.distance)} m</b></label><input type="range" min="0.5" max="5" step="0.1" value="${m.distance}" data-range="distance"></div>
       <div class="ctl"><label>Orientation <b id="vrot">${m.rot || 0}°</b></label><input type="range" min="-180" max="180" step="5" value="${m.rot || 0}" data-range="rot"></div>`);
     for (const g of LIBRARY) {

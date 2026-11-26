@@ -40,3 +40,7 @@ Ouvre l'URL dans Safari → Partager → **Sur l'écran d'accueil**. Si la conne
 - Téléphone : vue fiche par défaut (rendu calculé sur l'ordi à chaque sauvegarde, schéma, réglages), bouton 3D pour ajuster ponctuellement.
 - « Recréer depuis une photo » (section Schémas) : analyse du portrait dans le navigateur (MediaPipe Face Landmarker, fichiers dans `vendor/mediapipe`, ~18 Mo chargés seulement à la première analyse).
 - Fichier de set `.lightset` : export depuis l'éditeur (Exporter → Fichier du set), import depuis l'accueil (+ Nouveau → Importer un fichier de set).
+
+## Crédits
+- Coiffures des bustes réalistes `hair_witchy`, `hair_keylth`, `hair_sidedo`, `hair_babe80`, `hair_cornrows`, `hair_maxwell`, `hair_grump` : adaptées du pack « Hair 02 » de MakeHuman, par **Elvaerwyn**, licence CC-BY 4.0 (https://static.makehumancommunity.org/assets/assetpacks/hair02.html). Textures passées en niveaux de gris et coiffures recalées sur les bustes.
+- Maillage de base et cibles : MakeHuman / MPFB2 (CC0).
